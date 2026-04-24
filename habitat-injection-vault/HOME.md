@@ -3,7 +3,7 @@
 # Habitat Injection — Vault Index
 
 > **Package:** `habitat-injection` | **Directory:** `~/claude-code-workspace/memory-injection/`
-> **Architecture:** 6 layers, 24 modules | **Phase:** Scaffold complete, implementation pending
+> **Architecture:** 6 layers, 27 modules | **Phase:** Library COMPLETE (1696 tests), CLI + deployment pending
 > **Quality gate:** `cargo check` + `clippy -D warnings` + `clippy pedantic` + `cargo test --lib`
 > **Origin:** Circle of Experts deliberation (10 CC instances, 4 rounds, 48 arguments, 384 KB)
 
@@ -40,10 +40,15 @@
 - [[Three-Tier Fallback]] — SQLite -> atuin KV -> static fallback chain
 - [[Tool Chain Patterns]] — TC6-TC10 habitat-injection patterns
 
+### Execution (Phase 3 — CLI + Deployment)
+- [[Execution Plan]] — 11 steps from library-complete to production
+- [[CLI Binary Architecture]] — 4 binaries, dependency map, sequence diagrams
+- [[Deployment Checklist]] — step-by-step checklist with acceptance criteria
+
 ### Operations
 - [[Binary Map]] — 5 binaries: inject, consolidate, query, init, scripts
 - [[Hook Registration]] — SessionStart hook wiring in settings.json
-- [[Quality Gate Protocol]] — 4-stage zero-tolerance gate
+- [[Quality Gate Protocol]] — 5-stage zero-tolerance gate (incl. no-default-features)
 - [[Deliberation Record]] — Circle of Experts provenance and consensus
 
 ### Cross-References
