@@ -40,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use crate::m1_foundation::m03_config::InjectionConfig;
 #[cfg(feature = "sqlite")]
 use crate::m1_foundation::m05_constants;
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::InjectionError;
 #[cfg(feature = "sqlite")]
 use crate::m2_schema::m07_causal_chain::{CausalChainRow, find_unresolved};

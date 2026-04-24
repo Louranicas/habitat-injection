@@ -1,3 +1,6 @@
+#![doc = include_str!("../../ai_docs/modules/L3_INJECTION_ENGINE.md")]
+#![allow(clippy::doc_markdown)]
+
 //! `m3_injection` layer modules.
 
 pub mod m11_parallel_query;

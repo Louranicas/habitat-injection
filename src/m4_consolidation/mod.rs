@@ -1,3 +1,6 @@
+#![doc = include_str!("../../ai_docs/modules/L4_CONSOLIDATION_ENGINE.md")]
+#![allow(clippy::doc_markdown)]
+
 //! `m4_consolidation` layer modules.
 
 pub mod m15_checkpoint_ingest;

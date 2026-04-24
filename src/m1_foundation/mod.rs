@@ -1,3 +1,6 @@
+#![doc = include_str!("../../ai_docs/modules/L1_FOUNDATION.md")]
+#![allow(clippy::doc_markdown)]
+
 //! `m1_foundation` layer modules.
 
 pub mod m01_types;

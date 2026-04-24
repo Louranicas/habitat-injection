@@ -44,6 +44,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "sqlite")]
 use tracing::{debug, info};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::ConsolidationError;
 #[cfg(feature = "sqlite")]
 use crate::m1_foundation::m03_config::InjectionConfig;

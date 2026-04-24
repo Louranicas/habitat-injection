@@ -23,6 +23,7 @@
 //! `m02_errors`, `m07_causal_chain`, `m08_trajectory`, `m09_workstream`,
 //! `m10_pattern`
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::QueryError;
 
 #[cfg(feature = "sqlite")]

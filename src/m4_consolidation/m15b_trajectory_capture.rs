@@ -9,12 +9,17 @@
 //! Layer: `m4_consolidation`
 //! Dependencies: `m01_types`, `m02_errors`, `m08_trajectory`
 
+#[cfg(feature = "sqlite")]
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "sqlite")]
 use tracing::{debug, info, instrument};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::ConsolidationError;
-use crate::m2_schema::m08_trajectory::{get_by_session, get_recent, insert_point, TrajectoryRow};
+use crate::m2_schema::m08_trajectory::TrajectoryRow;
+#[cfg(feature = "sqlite")]
+use crate::m2_schema::m08_trajectory::{get_by_session, get_recent, insert_point};
 
 // ---------------------------------------------------------------------------
 // Epsilon for flat-fitness detection
@@ -88,6 +93,7 @@ pub struct CaptureResult {
 /// Returns [`ConsolidationError::TrajectoryCaptureFailed`] when any schema
 /// operation fails.  The `reason` field includes the underlying [`SchemaError`]
 /// message.
+#[cfg(feature = "sqlite")]
 #[instrument(skip(conn, snapshot), fields(session_id))]
 pub fn capture_trajectory(
     conn: &Connection,
@@ -238,6 +244,7 @@ pub fn compute_fitness_trend(current: f64, previous: Option<f64>) -> &'static st
 /// session does not yet exist, so the most-recent row is guaranteed to be the
 /// predecessor.  When `session_id` is already in the table (idempotency path)
 /// we need the row immediately before it — handled by a targeted query.
+#[cfg(feature = "sqlite")]
 fn previous_row(
     conn: &Connection,
     session_id: u32,
@@ -266,7 +273,7 @@ fn previous_row(
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;

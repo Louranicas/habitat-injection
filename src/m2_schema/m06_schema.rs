@@ -2,12 +2,16 @@
 //!
 //! Idempotent — safe to call on an existing database.
 
+#[cfg(feature = "sqlite")]
 use std::path::Path;
 
+#[cfg(feature = "sqlite")]
 use rusqlite::Connection;
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 const CURRENT_VERSION: u32 = 3;
 
 /// Open (or create) the injection database and ensure schema is current.
@@ -15,6 +19,7 @@ const CURRENT_VERSION: u32 = 3;
 /// # Errors
 ///
 /// Returns [`SchemaError`] on database open or migration failure.
+#[cfg(feature = "sqlite")]
 pub fn open_database(path: &Path) -> Result<Connection, SchemaError> {
     let needs_create = !path.exists();
 
@@ -50,6 +55,7 @@ pub fn open_database(path: &Path) -> Result<Connection, SchemaError> {
 /// # Errors
 ///
 /// Returns [`SchemaError`] if schema creation fails.
+#[cfg(feature = "sqlite")]
 pub fn open_memory() -> Result<Connection, SchemaError> {
     let conn = Connection::open_in_memory().map_err(|e| SchemaError::DatabaseOpenFailed {
         path: ":memory:".into(),
@@ -61,6 +67,7 @@ pub fn open_memory() -> Result<Connection, SchemaError> {
     Ok(conn)
 }
 
+#[cfg(feature = "sqlite")]
 fn configure_connection(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
@@ -76,6 +83,7 @@ fn configure_connection(conn: &Connection) -> Result<(), SchemaError> {
 /// # Errors
 ///
 /// Returns [`SchemaError::TableCreationFailed`] on failure.
+#[cfg(feature = "sqlite")]
 pub fn create_all_tables(conn: &Connection) -> Result<(), SchemaError> {
     create_causal_chain(conn)?;
     create_session_trajectory(conn)?;
@@ -87,6 +95,7 @@ pub fn create_all_tables(conn: &Connection) -> Result<(), SchemaError> {
     Ok(())
 }
 
+#[cfg(feature = "sqlite")]
 fn create_causal_chain(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS causal_chain (
@@ -114,6 +123,7 @@ fn create_causal_chain(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_session_trajectory(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS session_trajectory (
@@ -137,6 +147,7 @@ fn create_session_trajectory(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_workstream(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS workstream (
@@ -163,6 +174,7 @@ fn create_workstream(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_reinforced_pattern(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS reinforced_pattern (
@@ -187,6 +199,7 @@ fn create_reinforced_pattern(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_injection_cache(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS injection_cache (
@@ -203,6 +216,7 @@ fn create_injection_cache(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_session_checkpoint(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS session_checkpoint (
@@ -244,6 +258,7 @@ fn create_session_checkpoint(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn create_injection_script(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS injection_script (
@@ -271,6 +286,7 @@ fn create_injection_script(conn: &Connection) -> Result<(), SchemaError> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 fn get_schema_version(conn: &Connection) -> Result<u32, SchemaError> {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
@@ -278,11 +294,13 @@ fn get_schema_version(conn: &Connection) -> Result<u32, SchemaError> {
     Ok(version)
 }
 
+#[cfg(feature = "sqlite")]
 fn set_schema_version(conn: &Connection, version: u32) -> Result<(), SchemaError> {
     conn.pragma_update(None, "user_version", version)
         .map_err(|e| SchemaError::Sqlite(e.to_string()))
 }
 
+#[cfg(feature = "sqlite")]
 fn migrate(conn: &Connection, from: u32, to: u32) -> Result<(), SchemaError> {
     for v in from..to {
         match v {
@@ -307,6 +325,7 @@ fn migrate(conn: &Connection, from: u32, to: u32) -> Result<(), SchemaError> {
     Ok(())
 }
 
+#[cfg(feature = "sqlite")]
 fn migrate_v1_to_v2(conn: &Connection) -> Result<(), SchemaError> {
     conn.execute_batch("BEGIN;")
         .map_err(|e| SchemaError::MigrationFailed { version: 2, reason: e.to_string() })?;
@@ -325,6 +344,7 @@ fn migrate_v1_to_v2(conn: &Connection) -> Result<(), SchemaError> {
     result
 }
 
+#[cfg(feature = "sqlite")]
 fn migrate_v1_to_v2_inner(conn: &Connection) -> Result<(), SchemaError> {
     let ts_default = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
     for table in ["causal_chain", "workstream", "reinforced_pattern"] {
@@ -343,7 +363,16 @@ fn migrate_v1_to_v2_inner(conn: &Connection) -> Result<(), SchemaError> {
     Ok(())
 }
 
+#[cfg(feature = "sqlite")]
 fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, SchemaError> {
+    debug_assert!(
+        table.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+        "table name must be alphanumeric: {table}"
+    );
+    debug_assert!(
+        column.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+        "column name must be alphanumeric: {column}"
+    );
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table})"))
         .map_err(|e| SchemaError::Sqlite(e.to_string()))?;
@@ -359,6 +388,7 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, S
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query failure.
+#[cfg(feature = "sqlite")]
 pub fn list_tables(conn: &Connection) -> Result<Vec<String>, SchemaError> {
     let mut stmt = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -376,11 +406,12 @@ pub fn list_tables(conn: &Connection) -> Result<Vec<String>, SchemaError> {
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query failure.
+#[cfg(feature = "sqlite")]
 pub fn schema_version(conn: &Connection) -> Result<u32, SchemaError> {
     get_schema_version(conn)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
 
@@ -1286,7 +1317,8 @@ mod tests {
     }
 
     #[test]
-    fn column_exists_returns_true_for_known_column() {
+    #[cfg(feature = "sqlite")]
+fn column_exists_returns_true_for_known_column() {
         let conn = mem_db();
         assert!(column_exists(&conn, "causal_chain", "created_at").unwrap());
         assert!(column_exists(&conn, "workstream", "updated_at").unwrap());
@@ -1294,7 +1326,8 @@ mod tests {
     }
 
     #[test]
-    fn column_exists_returns_false_for_unknown_column() {
+    #[cfg(feature = "sqlite")]
+fn column_exists_returns_false_for_unknown_column() {
         let conn = mem_db();
         assert!(!column_exists(&conn, "causal_chain", "nonexistent_col").unwrap());
     }

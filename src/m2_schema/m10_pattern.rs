@@ -9,11 +9,14 @@
 //! Dependencies: `m01_types`, `m02_errors`, `m06_schema`
 //! Memory Scientist + Performance Engineer
 
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, OptionalExtension as _, params};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 use super::sqlite_err;
 
 // ---------------------------------------------------------------------------
@@ -47,6 +50,7 @@ pub struct PatternRow {
 // ---------------------------------------------------------------------------
 
 /// Parse a `PatternRow` from a `rusqlite::Row`.
+#[cfg(feature = "sqlite")]
 fn row_to_pattern(row: &rusqlite::Row<'_>) -> rusqlite::Result<PatternRow> {
     Ok(PatternRow {
         pattern_id: row.get(0)?,
@@ -73,6 +77,7 @@ fn row_to_pattern(row: &rusqlite::Row<'_>) -> rusqlite::Result<PatternRow> {
 ///
 /// Returns [`SchemaError::Sqlite`] if the insert fails (e.g., duplicate
 /// `pattern_id` or invalid `category`).
+#[cfg(feature = "sqlite")]
 pub fn insert_pattern(
     conn: &Connection,
     pattern_id: &str,
@@ -98,6 +103,7 @@ pub fn insert_pattern(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn reinforce(
     conn: &Connection,
     pattern_id: &str,
@@ -125,6 +131,7 @@ pub fn reinforce(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn decay_all(conn: &Connection, rate: f64) -> Result<u32, SchemaError> {
     let updated = conn
         .execute(
@@ -145,6 +152,7 @@ pub fn decay_all(conn: &Connection, rate: f64) -> Result<u32, SchemaError> {
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn prune_weak(conn: &Connection, threshold: f64) -> Result<u32, SchemaError> {
     let deleted = conn
         .execute(
@@ -160,6 +168,7 @@ pub fn prune_weak(conn: &Connection, threshold: f64) -> Result<u32, SchemaError>
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on prepare or query failure.
+#[cfg(feature = "sqlite")]
 pub fn get_top_by_weight(
     conn: &Connection,
     limit: usize,
@@ -189,6 +198,7 @@ pub fn get_top_by_weight(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn get_by_id(
     conn: &Connection,
     pattern_id: &str,
@@ -213,6 +223,7 @@ pub fn get_by_id(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn get_by_category(
     conn: &Connection,
     category: &str,
@@ -241,6 +252,7 @@ pub fn get_by_category(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
 pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
     let n: i64 = conn
         .query_row(
@@ -256,11 +268,12 @@ pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;
 
+#[cfg(feature = "sqlite")]
     fn mem() -> Connection {
         open_memory().unwrap()
     }
@@ -268,6 +281,7 @@ mod tests {
     // ---- insert_pattern ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_minimal_pattern() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "Always verify before deploying", None).unwrap();
@@ -275,6 +289,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_with_anti_pattern() {
         let conn = mem();
         insert_pattern(
@@ -293,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_default_weight() {
         let conn = mem();
         insert_pattern(&conn, "p1", "semantic", "desc", None).unwrap();
@@ -301,6 +317,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_default_hit_count() {
         let conn = mem();
         insert_pattern(&conn, "p1", "feedback", "desc", None).unwrap();
@@ -309,6 +326,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_last_fired_session_null_by_default() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -317,6 +335,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_default_consent_is_emit() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -325,6 +344,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_duplicate_pattern_id_fails() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -333,6 +353,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_invalid_category_fails() {
         let conn = mem();
         let result = insert_pattern(&conn, "p1", "bogus", "desc", None);
@@ -340,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_all_valid_categories() {
         let conn = mem();
         for (i, cat) in ["procedural", "semantic", "trap", "feedback"]
@@ -354,6 +376,7 @@ mod tests {
     // ---- reinforce ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_returns_true_when_found() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -361,12 +384,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_returns_false_when_not_found() {
         let conn = mem();
         assert!(!reinforce(&conn, "nonexistent", 110).unwrap());
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_updates_last_fired_session() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -376,6 +401,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_increments_hit_count() {
         let conn = mem();
         insert_pattern(&conn, "p1", "semantic", "desc", None).unwrap();
@@ -386,6 +412,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_math_correct_single_step() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -397,6 +424,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_math_correct_second_step() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -407,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_approaches_one_asymptotically() {
         let conn = mem();
         insert_pattern(&conn, "p1", "feedback", "desc", None).unwrap();
@@ -420,6 +449,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_never_reaches_or_exceeds_one() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -431,6 +461,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_updates_session_to_latest() {
         let conn = mem();
         insert_pattern(&conn, "p1", "semantic", "desc", None).unwrap();
@@ -443,6 +474,7 @@ mod tests {
     // ---- decay_all ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_all_returns_zero_when_no_fired_patterns() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -452,6 +484,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_all_only_affects_fired_patterns() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap(); // unfired
@@ -465,6 +498,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_all_math_correct() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -476,6 +510,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_all_returns_correct_count() {
         let conn = mem();
         for i in 0..5 {
@@ -488,6 +523,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_all_repeated_application_reduces_weight() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -503,6 +539,7 @@ mod tests {
     // ---- prune_weak ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_weak_returns_zero_when_nothing_below_threshold() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap(); // weight=0.5
@@ -511,6 +548,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_weak_deletes_below_threshold() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -522,6 +560,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_weak_does_not_delete_at_threshold() {
         let conn = mem();
         // Insert with explicit weight = threshold via raw SQL
@@ -537,6 +576,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_weak_deletes_correct_count() {
         let conn = mem();
         // 3 patterns with low weights, 2 with high
@@ -554,6 +594,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_then_prune_removes_weak_patterns() {
         let conn = mem();
         insert_pattern(&conn, "strong", "procedural", "desc", None).unwrap();
@@ -578,6 +619,7 @@ mod tests {
     // ---- get_top_by_weight ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_top_by_weight_empty_table() {
         let conn = mem();
         let rows = get_top_by_weight(&conn, 5).unwrap();
@@ -585,6 +627,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_top_by_weight_returns_ordered_desc() {
         let conn = mem();
         for (i, w) in [0.3, 0.9, 0.1, 0.7].iter().enumerate() {
@@ -604,6 +647,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_top_by_weight_limit_respected() {
         let conn = mem();
         for i in 0..10 {
@@ -614,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_top_by_weight_zero_limit() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -622,6 +667,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_top_by_weight_all_fields_populated() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", Some("anti")).unwrap();
@@ -641,6 +687,7 @@ mod tests {
     // ---- get_by_id ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_id_returns_none_when_missing() {
         let conn = mem();
         let row = get_by_id(&conn, "nonexistent").unwrap();
@@ -648,6 +695,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_id_returns_correct_row() {
         let conn = mem();
         insert_pattern(&conn, "p1", "feedback", "my feedback pattern", None).unwrap();
@@ -658,6 +706,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_id_does_not_return_other_rows() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc1", None).unwrap();
@@ -670,6 +719,7 @@ mod tests {
     // ---- get_by_category ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_category_empty_result() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -678,6 +728,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_category_returns_only_matching() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc1", None).unwrap();
@@ -691,6 +742,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_category_ordered_by_weight_desc() {
         let conn = mem();
         conn.execute(
@@ -711,6 +763,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_category_all_four_valid() {
         let conn = mem();
         for (i, cat) in ["procedural", "semantic", "trap", "feedback"]
@@ -728,12 +781,14 @@ mod tests {
     // ---- count ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_empty_table() {
         let conn = mem();
         assert_eq!(count(&conn).unwrap(), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_increments_on_insert() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -743,6 +798,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_decrements_on_prune() {
         let conn = mem();
         for i in 0..5 {
@@ -763,6 +819,7 @@ mod tests {
     // ---- integration / cross-function ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn full_lifecycle_insert_reinforce_decay_prune() {
         // Mathematical analysis (all weights start at 0.5 per schema default):
         //
@@ -797,6 +854,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_then_get_top_shows_updated_weight() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -810,6 +868,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn category_filter_after_reinforce() {
         let conn = mem();
         insert_pattern(&conn, "t1", "trap", "desc", None).unwrap();
@@ -822,6 +881,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_values_survive_round_trip() {
         let conn = mem();
         for (i, consent) in ["Emit", "Store", "Forget"].iter().enumerate() {
@@ -839,6 +899,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn invalid_consent_fails() {
         let conn = mem();
         let result = conn.execute(
@@ -850,6 +911,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn pattern_row_derives_clone() {
         let conn = mem();
         insert_pattern(&conn, "p1", "procedural", "desc", None).unwrap();
@@ -859,6 +921,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn pattern_row_serde_roundtrip() {
         let conn = mem();
         insert_pattern(&conn, "p1", "semantic", "desc", Some("anti")).unwrap();
@@ -871,6 +934,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn multiple_reinforcements_hit_count_exact() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -883,6 +947,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_rate_zero_sets_weight_to_zero() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -893,6 +958,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn decay_rate_one_leaves_weight_unchanged() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -904,6 +970,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_threshold_zero_deletes_nothing() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
@@ -913,6 +980,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn prune_threshold_one_deletes_all() {
         let conn = mem();
         for i in 0..4 {
@@ -925,6 +993,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn asymptotic_convergence_50_steps() {
         // After N steps: w_n = 1 - 0.9^(n+1) * (1 - w0)
         // Verify the formula holds numerically.

@@ -1,3 +1,6 @@
+#![doc = include_str!("../../ai_docs/modules/L5_QUERY_&_BROWSER.md")]
+#![allow(clippy::doc_markdown)]
+
 //! `m5_query` layer modules.
 
 pub mod m19_preset_queries;

@@ -16,11 +16,14 @@
 //!
 //! `m01_types`, `m02_errors`, `m06_schema`
 
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, OptionalExtension as _, params};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 use super::sqlite_err;
 
 // ---------------------------------------------------------------------------
@@ -59,6 +62,7 @@ pub struct CausalChainRow {
 // ---------------------------------------------------------------------------
 
 /// Parse a single [`CausalChainRow`] from a prepared-statement row.
+#[cfg(feature = "sqlite")]
 fn parse_row(row: &rusqlite::Row<'_>) -> Result<CausalChainRow, rusqlite::Error> {
     Ok(CausalChainRow {
         id: row.get(0)?,
@@ -86,6 +90,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> Result<CausalChainRow, rusqlite::Error>
 ///
 /// Returns [`SchemaError::Sqlite`] if the INSERT fails (e.g. a `CHECK`
 /// constraint violation for an invalid `chain_type`).
+#[cfg(feature = "sqlite")]
 pub fn insert_chain(
     conn: &Connection,
     origin_session: u32,
@@ -111,6 +116,7 @@ pub fn insert_chain(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database failure.
+#[cfg(feature = "sqlite")]
 pub fn resolve_chain(
     conn: &Connection,
     id: i64,
@@ -138,6 +144,7 @@ pub fn resolve_chain(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database failure.
+#[cfg(feature = "sqlite")]
 pub fn reinforce_chain(
     conn: &Connection,
     label: &str,
@@ -178,6 +185,7 @@ pub fn reinforce_chain(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or row-parse failure.
+#[cfg(feature = "sqlite")]
 pub fn find_unresolved(
     conn: &Connection,
     limit: usize,
@@ -211,6 +219,7 @@ pub fn find_unresolved(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or row-parse failure.
+#[cfg(feature = "sqlite")]
 pub fn find_by_label(
     conn: &Connection,
     label: &str,
@@ -245,6 +254,7 @@ pub fn find_by_label(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on database failure.
+#[cfg(feature = "sqlite")]
 pub fn auto_resolve_stale(
     conn: &Connection,
     current_session: u32,
@@ -276,6 +286,7 @@ pub fn auto_resolve_stale(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query failure.
+#[cfg(feature = "sqlite")]
 pub fn count_unresolved(conn: &Connection) -> Result<u64, SchemaError> {
     conn.query_row(
         "SELECT COUNT(*) FROM causal_chain WHERE resolved_session IS NULL",
@@ -290,7 +301,7 @@ pub fn count_unresolved(conn: &Connection) -> Result<u64, SchemaError> {
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;
@@ -300,6 +311,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_returns_positive_id() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "BUG-001", "test bug").unwrap();
@@ -307,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_two_ids_are_distinct() {
         let conn = open_memory().unwrap();
         let id1 = insert_chain(&conn, 109, "bug", "BUG-001", "first").unwrap();
@@ -315,6 +328,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_ids_are_monotonically_increasing() {
         let conn = open_memory().unwrap();
         let id1 = insert_chain(&conn, 109, "bug", "A", "a").unwrap();
@@ -325,30 +339,35 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_chain_type_bug() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 1, "bug", "L1", "desc").unwrap();
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_chain_type_trap() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 1, "trap", "L2", "desc").unwrap();
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_chain_type_plan() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 1, "plan", "L3", "desc").unwrap();
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_chain_type_pattern() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 1, "pattern", "L4", "desc").unwrap();
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_invalid_chain_type_errors() {
         let conn = open_memory().unwrap();
         let result = insert_chain(&conn, 1, "invalid", "L5", "desc");
@@ -356,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_empty_chain_type_errors() {
         let conn = open_memory().unwrap();
         let result = insert_chain(&conn, 1, "", "L6", "desc");
@@ -363,6 +383,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_default_reinforcement_count_is_one() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "RC-1", "test").unwrap();
@@ -372,6 +393,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_default_consent_is_emit() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "CONSENT-1", "test").unwrap();
@@ -380,6 +402,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_resolved_session_is_null_by_default() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "RS-1", "test").unwrap();
@@ -388,6 +411,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_last_reinforced_session_is_null_by_default() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "LR-1", "test").unwrap();
@@ -396,6 +420,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_stores_origin_session() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 42, "plan", "PLAN-1", "plan desc").unwrap();
@@ -404,6 +429,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_stores_label_and_description() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 1, "bug", "LABEL-X", "My description").unwrap();
@@ -417,6 +443,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_returns_true_for_known_id() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "BUG-R1", "resolve me").unwrap();
@@ -425,6 +452,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_returns_false_for_unknown_id() {
         let conn = open_memory().unwrap();
         let found = resolve_chain(&conn, 999_999, 110).unwrap();
@@ -432,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_sets_resolved_session() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "BUG-R2", "x").unwrap();
@@ -441,6 +470,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_twice_overwrites_session() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "BUG-R3", "x").unwrap();
@@ -451,6 +481,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_does_not_affect_other_rows() {
         let conn = open_memory().unwrap();
         let id1 = insert_chain(&conn, 109, "bug", "OTHER-1", "x").unwrap();
@@ -466,6 +497,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_existing_returns_true() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "REINF-1", "x").unwrap();
@@ -474,6 +506,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_missing_returns_false_and_creates_row() {
         let conn = open_memory().unwrap();
         let found = reinforce_chain(&conn, "NEW-LABEL", 110).unwrap();
@@ -483,6 +516,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_increments_count() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "CNT-1", "x").unwrap();
@@ -492,6 +526,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_multiple_times_accumulates() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "trap", "CNT-2", "trap").unwrap();
@@ -503,6 +538,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_updates_last_reinforced_session() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "LRS-1", "x").unwrap();
@@ -512,6 +548,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_overwrites_last_session_on_second_call() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "LRS-2", "x").unwrap();
@@ -522,6 +559,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_auto_seeds_with_trap_type() {
         let conn = open_memory().unwrap();
         reinforce_chain(&conn, "AUTO-TRAP", 109).unwrap();
@@ -530,6 +568,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_auto_seeded_count_is_one() {
         let conn = open_memory().unwrap();
         reinforce_chain(&conn, "AUTO-COUNT", 109).unwrap();
@@ -542,6 +581,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_empty_db_returns_empty() {
         let conn = open_memory().unwrap();
         let rows = find_unresolved(&conn, 10).unwrap();
@@ -549,6 +589,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_excludes_resolved_rows() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "DONE", "resolved").unwrap();
@@ -560,6 +601,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_ordered_by_reinforcement_desc() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "LOW", "x").unwrap();
@@ -573,6 +615,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_respects_limit() {
         let conn = open_memory().unwrap();
         for i in 0..10_u32 {
@@ -583,6 +626,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_limit_zero_returns_empty() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "Z1", "x").unwrap();
@@ -591,6 +635,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_all_resolved_returns_empty() {
         let conn = open_memory().unwrap();
         let id1 = insert_chain(&conn, 109, "bug", "X1", "x").unwrap();
@@ -602,6 +647,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_rows_have_null_resolved_session() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "NULL-RS", "x").unwrap();
@@ -616,6 +662,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_by_label_returns_none_for_unknown() {
         let conn = open_memory().unwrap();
         let result = find_by_label(&conn, "DOES-NOT-EXIST").unwrap();
@@ -623,6 +670,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_by_label_returns_row_for_known() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "FOUND", "here").unwrap();
@@ -631,6 +679,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_by_label_returns_correct_fields() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 42, "plan", "PLAN-42", "my plan").unwrap();
@@ -642,6 +691,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_by_label_is_case_sensitive() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "case-LABEL", "x").unwrap();
@@ -656,6 +706,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_returns_zero_when_no_stale() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "FRESH", "x").unwrap();
@@ -665,6 +716,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_resolves_stale_by_origin() {
         let conn = open_memory().unwrap();
         // origin 100, current 115, threshold 10 → 15 ≥ 10 → stale
@@ -676,6 +728,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_resolves_stale_by_last_reinforced() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 100, "trap", "STALE-2", "x").unwrap();
@@ -688,6 +741,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_does_not_touch_recently_reinforced() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 100, "bug", "ACTIVE", "x").unwrap();
@@ -698,6 +752,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_skips_already_resolved() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 100, "bug", "ALREADY", "x").unwrap();
@@ -707,6 +762,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_returns_correct_count_for_multiple() {
         let conn = open_memory().unwrap();
         // Three stale rows
@@ -720,6 +776,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_threshold_boundary_exclusive() {
         let conn = open_memory().unwrap();
         // origin 110, current 119, threshold 10 → gap 9 < 10 → NOT stale
@@ -729,6 +786,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_threshold_boundary_inclusive() {
         let conn = open_memory().unwrap();
         // origin 110, current 120, threshold 10 → gap 10 ≥ 10 → stale
@@ -742,12 +800,14 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_unresolved_empty_db_is_zero() {
         let conn = open_memory().unwrap();
         assert_eq!(count_unresolved(&conn).unwrap(), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_unresolved_counts_only_open() {
         let conn = open_memory().unwrap();
         let id1 = insert_chain(&conn, 109, "bug", "CU-1", "x").unwrap();
@@ -757,6 +817,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_unresolved_increases_on_insert() {
         let conn = open_memory().unwrap();
         assert_eq!(count_unresolved(&conn).unwrap(), 0);
@@ -767,6 +828,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_unresolved_decreases_on_resolve() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "CU-DEC", "x").unwrap();
@@ -776,6 +838,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_unresolved_after_auto_resolve() {
         let conn = open_memory().unwrap();
         for i in 0..5_u32 {
@@ -791,6 +854,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_struct_all_fields_present() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "pattern", "STRUCT-1", "pattern desc").unwrap();
@@ -807,6 +871,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_is_clone() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "CLONE-1", "x").unwrap();
@@ -815,6 +880,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_debug_not_empty() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "DBG-1", "x").unwrap();
@@ -824,6 +890,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_serializes_to_json() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "trap", "JSON-1", "json test").unwrap();
@@ -834,6 +901,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_roundtrips_through_json() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 42, "plan", "RT-1", "roundtrip").unwrap();
@@ -850,6 +918,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn all_chain_types_roundtrip() {
         let conn = open_memory().unwrap();
         for ct in &["bug", "trap", "plan", "pattern"] {
@@ -861,6 +930,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn large_description_stores_correctly() {
         let conn = open_memory().unwrap();
         let long_desc = "x".repeat(10_000);
@@ -870,6 +940,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn unicode_label_and_description() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "🐛-BUG", "emoji in label 🌍").unwrap();
@@ -879,6 +950,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_correct_ordering_with_many_rows() {
         let conn = open_memory().unwrap();
         // Insert rows with decreasing reinforcement counts
@@ -899,6 +971,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn reinforce_does_not_affect_resolved_status() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 109, "bug", "REINF-RS", "x").unwrap();
@@ -911,6 +984,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn session_zero_is_valid() {
         let conn = open_memory().unwrap();
         let id = insert_chain(&conn, 0, "bug", "S0-1", "session zero").unwrap();
@@ -920,6 +994,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resolve_chain_on_empty_db_returns_false() {
         let conn = open_memory().unwrap();
         let found = resolve_chain(&conn, 1, 100).unwrap();
@@ -927,6 +1002,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn find_unresolved_large_limit_returns_all() {
         let conn = open_memory().unwrap();
         for i in 0..7_u32 {
@@ -937,6 +1013,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn auto_resolve_threshold_zero_resolves_all() {
         let conn = open_memory().unwrap();
         insert_chain(&conn, 109, "bug", "TH0-A", "x").unwrap();
@@ -947,6 +1024,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_and_find_unresolved_agree() {
         let conn = open_memory().unwrap();
         for i in 0..6_u32 {

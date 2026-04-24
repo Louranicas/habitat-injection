@@ -7,11 +7,14 @@
 //! Layer: `m2_schema`
 //! Dependencies: `m01_types`, `m02_errors`, `m06_schema`
 
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, OptionalExtension as _};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 use super::sqlite_err;
 
 // ---------------------------------------------------------------------------
@@ -60,6 +63,7 @@ pub struct TrajectoryRow {
 // contract specified in the module doc. A builder struct would add complexity
 // without reducing the call sites; the allow is intentional.
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "sqlite")]
 pub fn insert_point(
     conn: &Connection,
     session_id: u32,
@@ -98,6 +102,7 @@ pub fn insert_point(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any `rusqlite` error.
+#[cfg(feature = "sqlite")]
 pub fn get_recent(conn: &Connection, n: usize) -> Result<Vec<TrajectoryRow>, SchemaError> {
     let n_i64 = i64::try_from(n).unwrap_or(i64::MAX);
     let mut stmt = conn
@@ -129,6 +134,7 @@ pub fn get_recent(conn: &Connection, n: usize) -> Result<Vec<TrajectoryRow>, Sch
 ///
 /// Returns [`SchemaError::Sqlite`] if the target `session_id` does not exist or
 /// on any `rusqlite` error.
+#[cfg(feature = "sqlite")]
 pub fn compute_delta(conn: &Connection, session_id: u32) -> Result<Option<f64>, SchemaError> {
     // Fetch the fitness of the target session. Return Ok(None) when the session
     // does not exist — consistent with the documented contract.
@@ -174,6 +180,7 @@ pub fn compute_delta(conn: &Connection, session_id: u32) -> Result<Option<f64>, 
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any `rusqlite` error.
+#[cfg(feature = "sqlite")]
 pub fn get_trend(conn: &Connection, n: usize) -> Result<Option<f64>, SchemaError> {
     let rows = get_recent(conn, n)?;
     Ok(compute_ols_slope(&rows))
@@ -185,6 +192,7 @@ pub fn get_trend(conn: &Connection, n: usize) -> Result<Option<f64>, SchemaError
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any `rusqlite` error.
+#[cfg(feature = "sqlite")]
 pub fn get_by_session(
     conn: &Connection,
     session_id: u32,
@@ -206,6 +214,7 @@ pub fn get_by_session(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any `rusqlite` error.
+#[cfg(feature = "sqlite")]
 pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
     conn.query_row(
         "SELECT COUNT(*) FROM session_trajectory",
@@ -221,6 +230,7 @@ pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
 // ---------------------------------------------------------------------------
 
 /// Map a `rusqlite` row to [`TrajectoryRow`].
+#[cfg(feature = "sqlite")]
 fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrajectoryRow> {
     Ok(TrajectoryRow {
         session_id: r.get::<_, u32>(0)?,
@@ -239,6 +249,7 @@ fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrajectoryRow> {
 /// for the provided rows.
 ///
 /// Returns `None` if fewer than 2 rows are supplied.
+#[cfg(feature = "sqlite")]
 fn compute_ols_slope(rows: &[TrajectoryRow]) -> Option<f64> {
     if rows.len() < 2 {
         return None;
@@ -271,19 +282,21 @@ fn compute_ols_slope(rows: &[TrajectoryRow]) -> Option<f64> {
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;
 
     // -- helpers --
 
+#[cfg(feature = "sqlite")]
     fn mem_db() -> Connection {
         open_memory().unwrap()
     }
 
     /// Insert a row with default field values; only `session_id` and
     /// `ralph_fitness` vary.
+#[cfg(feature = "sqlite")]
     fn insert_simple(conn: &Connection, session_id: u32, ralph_fitness: f64) {
         insert_point(conn, session_id, ralph_fitness, 0.5, 0.5, 2.0, 11, "ok", None).unwrap();
     }
@@ -293,6 +306,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_single_row_succeeds() {
         let conn = mem_db();
         assert!(
@@ -301,6 +315,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_correct_fitness() {
         let conn = mem_db();
         insert_simple(&conn, 109, 0.75);
@@ -309,6 +324,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_correct_field_r() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.888, 0.5, 1.0, 11, "x", None).unwrap();
@@ -317,6 +333,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_correct_thermal_t() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.333, 1.0, 11, "x", None).unwrap();
@@ -325,6 +342,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_correct_ltp_ltd() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.5, 9.88, 11, "x", None).unwrap();
@@ -333,6 +351,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_sets_correct_services_healthy() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.5, 1.0, 10, "x", None).unwrap();
@@ -341,6 +360,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_with_key_achievement_some() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.5, 1.0, 11, "x", Some("L8 sealed")).unwrap();
@@ -349,6 +369,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_with_key_achievement_none() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.5, 1.0, 11, "x", None).unwrap();
@@ -357,17 +378,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_duplicate_session_id_fails() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
         assert!(insert_simple_result(&conn, 1, 0.6).is_err());
     }
 
+#[cfg(feature = "sqlite")]
     fn insert_simple_result(conn: &Connection, session_id: u32, ralph_fitness: f64) -> Result<(), SchemaError> {
         insert_point(conn, session_id, ralph_fitness, 0.5, 0.5, 2.0, 11, "ok", None)
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_default_consent_is_emit() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -376,6 +400,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_multiple_rows_succeeds() {
         let conn = mem_db();
         for s in 100..=110 {
@@ -385,6 +410,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_delta_summary_stored_correctly() {
         let conn = mem_db();
         insert_point(&conn, 1, 0.5, 0.0, 0.5, 1.0, 11, "fitness stable", None).unwrap();
@@ -397,6 +423,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_returns_some() {
         let conn = mem_db();
         insert_simple(&conn, 109, 0.664);
@@ -405,12 +432,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_returns_none_when_missing() {
         let conn = mem_db();
         assert!(get_by_session(&conn, 999).unwrap().is_none());
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_correct_session_id() {
         let conn = mem_db();
         insert_simple(&conn, 42, 0.5);
@@ -419,6 +448,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_does_not_return_neighbour() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -432,12 +462,14 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_empty_table_returns_empty_vec() {
         let conn = mem_db();
         assert_eq!(get_recent(&conn, 5).unwrap().len(), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_returns_correct_count() {
         let conn = mem_db();
         for s in 100..=109 {
@@ -447,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_ordered_desc() {
         let conn = mem_db();
         for s in [105_u32, 108, 106, 107] {
@@ -458,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_with_n_larger_than_table_returns_all() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -467,6 +501,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_n_zero_returns_empty() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -475,6 +510,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_first_row_is_latest() {
         let conn = mem_db();
         for s in 100_u32..=109 {
@@ -485,6 +521,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_all_fields_populated() {
         let conn = mem_db();
         insert_point(&conn, 50, 0.77, 0.88, 0.55, 3.14, 10, "delta ok", Some("achievement")).unwrap();
@@ -505,6 +542,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_none_when_no_previous() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -512,6 +550,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_positive_when_fitness_increased() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -521,6 +560,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_negative_when_fitness_decreased() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.8);
@@ -530,6 +570,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_zero_when_fitness_unchanged() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.664);
@@ -539,6 +580,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_uses_immediately_preceding_session() {
         let conn = mem_db();
         insert_simple(&conn, 100, 0.3);
@@ -550,6 +592,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_none_when_session_not_found() {
         let conn = mem_db();
         // Session 999 doesn't exist — should return Ok(None) per the documented contract
@@ -559,6 +602,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn delta_with_many_sessions_uses_direct_predecessor() {
         let conn = mem_db();
         for s in 1_u32..=5 {
@@ -574,12 +618,14 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_none_when_table_empty() {
         let conn = mem_db();
         assert!(get_trend(&conn, 5).unwrap().is_none());
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_none_when_only_one_row() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -587,6 +633,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_positive_for_upward_fitness() {
         let conn = mem_db();
         // Fitness strictly increasing with session_id
@@ -598,6 +645,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_negative_for_downward_fitness() {
         let conn = mem_db();
         // Fitness strictly decreasing with session_id
@@ -609,6 +657,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_near_zero_for_flat_fitness() {
         let conn = mem_db();
         for s in 1_u32..=5 {
@@ -619,6 +668,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_with_two_points_exact_slope() {
         let conn = mem_db();
         // session 1 → 0.4, session 2 → 0.6 → slope = 0.2 per session
@@ -629,6 +679,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_n_larger_than_table_uses_all_rows() {
         let conn = mem_db();
         for s in 1_u32..=3 {
@@ -641,6 +692,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_n_limits_to_recent_sessions() {
         let conn = mem_db();
         // Early sessions: flat at 0.2
@@ -661,6 +713,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_with_noncontiguous_sessions() {
         let conn = mem_db();
         // Gaps in session IDs are fine; OLS uses actual values
@@ -676,12 +729,14 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_zero_when_empty() {
         let conn = mem_db();
         assert_eq!(count(&conn).unwrap(), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_increments_on_insert() {
         let conn = mem_db();
         for s in 1_u32..=7 {
@@ -691,6 +746,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_ten_rows() {
         let conn = mem_db();
         for s in 1_u32..=10 {
@@ -704,6 +760,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_on_empty_db_returns_none() {
         let conn = mem_db();
         let result = get_by_session(&conn, 1);
@@ -712,6 +769,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_on_empty_db_returns_ok_empty() {
         let conn = mem_db();
         let result = get_recent(&conn, 10);
@@ -720,6 +778,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn compute_delta_none_on_nonexistent_session() {
         let conn = mem_db();
         // Inserting session 1 but querying delta for 2 (which doesn't exist)
@@ -734,6 +793,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn row_consent_defaults_to_emit() {
         let conn = mem_db();
         insert_simple(&conn, 1, 0.5);
@@ -742,6 +802,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn raw_insert_with_store_consent_round_trips() {
         let conn = mem_db();
         conn.execute(
@@ -757,6 +818,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn raw_insert_with_forget_consent_round_trips() {
         let conn = mem_db();
         conn.execute(
@@ -772,6 +834,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn raw_insert_invalid_consent_fails() {
         let conn = mem_db();
         let result = conn.execute(
@@ -789,6 +852,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trend_identical_session_ids_returns_zero_slope() {
         // This is only possible by bypassing the PK — use two rows from a
         // manually constructed Vec to test the internal OLS helper directly.
@@ -825,6 +889,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trajectory_row_serde_round_trip() {
         let row = TrajectoryRow {
             session_id: 109,
@@ -846,6 +911,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trajectory_row_serde_none_key_achievement() {
         let row = TrajectoryRow {
             session_id: 1,
@@ -868,6 +934,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trajectory_row_clone() {
         let row = TrajectoryRow {
             session_id: 1,
@@ -885,6 +952,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn trajectory_row_debug_not_empty() {
         let row = TrajectoryRow {
             session_id: 1,

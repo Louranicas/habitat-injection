@@ -21,11 +21,13 @@
 //! Layer: `m2_schema`
 //! Dependencies: `m01_types` (indirectly), `m02_errors`, `m06_schema`
 
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 use super::sqlite_err;
 
 // ---------------------------------------------------------------------------
@@ -216,6 +218,7 @@ impl CheckpointInsert {
     /// Optional fields are `None` / default by [`Default`].
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg(feature = "sqlite")]
     pub fn new(
         label: impl Into<String>,
         timestamp_utc: impl Into<String>,
@@ -246,15 +249,18 @@ impl CheckpointInsert {
 // Helpers
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "sqlite")]
 fn ser_vec(v: &[String]) -> Result<String, SchemaError> {
     serde_json::to_string(v).map_err(|e| sqlite_err(format_args!("json serialise: {e}")))
 }
 
+#[cfg(feature = "sqlite")]
 fn de_vec(s: &str) -> Result<Vec<String>, SchemaError> {
     serde_json::from_str(s).map_err(|e| sqlite_err(format_args!("json deserialise: {e}")))
 }
 
 /// Extract a full [`CheckpointRow`] from a `rusqlite::Row`.
+#[cfg(feature = "sqlite")]
 fn row_from_rusqlite(row: &rusqlite::Row<'_>) -> Result<CheckpointRow, rusqlite::Error> {
     let accomplished_json: String = row.get(19)?;
     let in_progress_json: String = row.get(20)?;
@@ -303,14 +309,18 @@ fn row_from_rusqlite(row: &rusqlite::Row<'_>) -> Result<CheckpointRow, rusqlite:
 
 /// Tiny error wrapper so we can box a string into `rusqlite::Error`.
 #[derive(Debug)]
+#[cfg(feature = "sqlite")]
 struct SqlDeError(String);
 
+#[cfg(feature = "sqlite")]
 impl std::fmt::Display for SqlDeError {
+    #[cfg(feature = "sqlite")]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
 }
 
+#[cfg(feature = "sqlite")]
 impl std::error::Error for SqlDeError {}
 
 // ---------------------------------------------------------------------------
@@ -324,6 +334,7 @@ impl std::error::Error for SqlDeError {}
 /// Returns [`SchemaError::Sqlite`] on constraint violation (e.g. duplicate
 /// `label`) or database error. Returns [`SchemaError::Sqlite`] on JSON
 /// serialisation failure.
+#[cfg(feature = "sqlite")]
 pub fn insert_checkpoint(
     conn: &Connection,
     cp: &CheckpointInsert,
@@ -397,6 +408,7 @@ pub fn insert_checkpoint(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or deserialisation failure.
+#[cfg(feature = "sqlite")]
 pub fn get_by_label(
     conn: &Connection,
     label: &str,
@@ -431,6 +443,7 @@ pub fn get_by_label(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or deserialisation failure.
+#[cfg(feature = "sqlite")]
 pub fn get_by_session(
     conn: &Connection,
     session_number: u32,
@@ -464,6 +477,7 @@ pub fn get_by_session(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or deserialisation failure.
+#[cfg(feature = "sqlite")]
 pub fn get_recent(
     conn: &Connection,
     limit: usize,
@@ -501,6 +515,7 @@ pub fn get_recent(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query or deserialisation failure.
+#[cfg(feature = "sqlite")]
 pub fn get_latest(conn: &Connection) -> Result<Option<CheckpointRow>, SchemaError> {
     let rows = get_recent(conn, 1)?;
     Ok(rows.into_iter().next())
@@ -511,6 +526,7 @@ pub fn get_latest(conn: &Connection) -> Result<Option<CheckpointRow>, SchemaErro
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on query failure.
+#[cfg(feature = "sqlite")]
 pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
     conn.query_row("SELECT COUNT(*) FROM session_checkpoint", [], |r| r.get::<_, i64>(0))
         .map(i64::cast_unsigned)
@@ -521,17 +537,19 @@ pub fn count(conn: &Connection) -> Result<u64, SchemaError> {
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;
 
     // --- helpers -----------------------------------------------------------
 
+#[cfg(feature = "sqlite")]
     fn db() -> Connection {
         open_memory().expect("open_memory")
     }
 
+    #[cfg(feature = "sqlite")]
     fn minimal(label: &str) -> CheckpointInsert {
         CheckpointInsert::new(
             label,
@@ -549,6 +567,7 @@ mod tests {
     // --- insert_checkpoint (minimal) ---------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_minimal_returns_positive_id() {
         let conn = db();
         let id = insert_checkpoint(&conn, &minimal("s109-min")).expect("insert");
@@ -556,6 +575,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_minimal_count_becomes_one() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("s109-cnt")).expect("insert");
@@ -563,6 +583,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_multiple_count_increments() {
         let conn = db();
         for i in 0..5u32 {
@@ -574,6 +595,7 @@ mod tests {
     // --- insert_checkpoint (full / all optional) ---------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_full_optional_fields() {
         let conn = db();
         let mut cp = minimal("s109-full");
@@ -614,6 +636,7 @@ mod tests {
     // --- default values ---------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn default_services_total_is_12() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("def-total")).expect("insert");
@@ -624,6 +647,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn default_consent_is_emit() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("def-consent")).expect("insert");
@@ -634,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn default_git_dirty_files_is_zero() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("def-dirty")).expect("insert");
@@ -644,6 +669,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn default_watcher_ready_is_zero() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("def-watcher")).expect("insert");
@@ -656,6 +682,7 @@ mod tests {
     // --- JSON roundtrip for array columns ---------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn accomplished_json_roundtrip() {
         let conn = db();
         let mut cp = minimal("json-acc");
@@ -666,6 +693,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn in_progress_json_roundtrip() {
         let conn = db();
         let mut cp = minimal("json-ip");
@@ -676,6 +704,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn blocked_json_roundtrip() {
         let conn = db();
         let mut cp = minimal("json-bl");
@@ -686,6 +715,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn key_findings_json_roundtrip() {
         let conn = db();
         let mut cp = minimal("json-kf");
@@ -696,6 +726,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn empty_json_arrays_roundtrip() {
         let conn = db();
         let mut cp = minimal("json-empty");
@@ -714,6 +745,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn json_entries_with_special_characters() {
         let conn = db();
         let mut cp = minimal("json-special");
@@ -733,6 +765,7 @@ mod tests {
     // --- get_by_label -----------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_label_returns_none_for_missing() {
         let conn = db();
         let result = get_by_label(&conn, "no-such-label").expect("get");
@@ -740,6 +773,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_label_returns_correct_row() {
         let conn = db();
         let mut cp = minimal("find-me");
@@ -751,6 +785,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_label_case_sensitive() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("CaseSensitive")).expect("insert");
@@ -761,6 +796,7 @@ mod tests {
     // --- label uniqueness -------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn duplicate_label_errors() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("dup-label")).expect("first insert");
@@ -769,6 +805,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn different_labels_both_succeed() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("label-a")).expect("a");
@@ -779,6 +816,7 @@ mod tests {
     // --- get_by_session ---------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_returns_matching_rows() {
         let conn = db();
         for i in 0..3u32 {
@@ -798,6 +836,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_returns_empty_for_missing_session() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("s109-only")).expect("insert");
@@ -806,6 +845,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_ordered_by_timestamp_desc() {
         let conn = db();
         let timestamps = [
@@ -837,6 +877,7 @@ mod tests {
     // --- get_recent -------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_returns_latest_first() {
         let conn = db();
         let labels_ts = [
@@ -855,6 +896,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_limit_honoured() {
         let conn = db();
         for i in 0..10u32 {
@@ -865,6 +907,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_zero_limit_returns_empty() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("lim0")).expect("insert");
@@ -873,6 +916,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_recent_on_empty_table_returns_empty() {
         let conn = db();
         let rows = get_recent(&conn, 5).expect("get");
@@ -882,6 +926,7 @@ mod tests {
     // --- get_latest -------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_latest_returns_most_recent() {
         let conn = db();
         let labels_ts = [
@@ -898,12 +943,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_latest_on_empty_table_returns_none() {
         let conn = db();
         assert!(get_latest(&conn).expect("get").is_none());
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_latest_single_entry() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("solo")).expect("insert");
@@ -914,12 +961,14 @@ mod tests {
     // --- count ------------------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_empty_table_is_zero() {
         let conn = db();
         assert_eq!(count(&conn).expect("count"), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_after_ten_inserts_is_ten() {
         let conn = db();
         for i in 0..10u32 {
@@ -931,6 +980,7 @@ mod tests {
     // --- consent values ---------------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_store_stored_correctly() {
         let conn = db();
         let mut cp = minimal("consent-store");
@@ -943,6 +993,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_forget_stored_correctly() {
         let conn = db();
         let mut cp = minimal("consent-forget");
@@ -957,6 +1008,7 @@ mod tests {
     // --- row field correctness --------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn resume_instructions_preserved() {
         let conn = db();
         let mut cp = minimal("resume-check");
@@ -970,6 +1022,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn source_file_preserved() {
         let conn = db();
         let mut cp = minimal("src-check");
@@ -980,6 +1033,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn services_alive_preserved() {
         let conn = db();
         let mut cp = minimal("svc-alive");
@@ -990,6 +1044,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn services_total_override_respected() {
         let conn = db();
         let mut cp = minimal("svc-total");
@@ -1000,6 +1055,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn timestamp_utc_preserved() {
         let conn = db();
         let ts = "2026-04-24T13:37:42Z";
@@ -1010,6 +1066,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn watcher_ready_true_stored_as_one() {
         let conn = db();
         let mut cp = minimal("watcher-t");
@@ -1020,6 +1077,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn watcher_ready_false_stored_as_zero() {
         let conn = db();
         let mut cp = minimal("watcher-f");
@@ -1030,6 +1088,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn optional_fields_are_none_when_unset() {
         let conn = db();
         insert_checkpoint(&conn, &minimal("optionals")).expect("insert");
@@ -1052,11 +1111,13 @@ mod tests {
     // --- Consent type tests -----------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_default_is_emit() {
         assert_eq!(Consent::default(), Consent::Emit);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_as_str() {
         assert_eq!(Consent::Emit.as_str(), "Emit");
         assert_eq!(Consent::Store.as_str(), "Store");
@@ -1064,6 +1125,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_from_str_valid() {
         use std::str::FromStr;
         assert_eq!(Consent::from_str("Emit").expect("emit"), Consent::Emit);
@@ -1072,6 +1134,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_from_str_invalid_errors() {
         use std::str::FromStr;
         assert!(Consent::from_str("invalid").is_err());
@@ -1079,6 +1142,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn consent_display() {
         assert_eq!(Consent::Emit.to_string(), "Emit");
         assert_eq!(Consent::Store.to_string(), "Store");
@@ -1088,6 +1152,7 @@ mod tests {
     // --- CheckpointInsert::new() constructor ------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn new_constructor_sets_required_fields() {
         let cp = CheckpointInsert::new(
             "lbl",
@@ -1112,6 +1177,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn new_constructor_optional_fields_default_to_none() {
         let cp = CheckpointInsert::new("lbl", "ts", 1, vec![], vec![], vec![], vec![], "r", "/f");
         assert!(cp.session_number.is_none());
@@ -1122,6 +1188,7 @@ mod tests {
     // --- IDs are auto-increment and increasing ----------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn ids_are_increasing() {
         let conn = db();
         let id1 = insert_checkpoint(&conn, &minimal("id-a")).expect("a");
@@ -1134,6 +1201,7 @@ mod tests {
     // --- large vec serialisation ------------------------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn large_accomplished_array_roundtrip() {
         let conn = db();
         let items: Vec<String> = (0..100).map(|i| format!("item {i}")).collect();
@@ -1148,6 +1216,7 @@ mod tests {
     // --- get_by_session with no session_number set ------------------------
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_session_ignores_rows_without_session_number() {
         let conn = db();
         // Insert row without session_number

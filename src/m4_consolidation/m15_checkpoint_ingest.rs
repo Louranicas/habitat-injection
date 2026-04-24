@@ -35,11 +35,15 @@
 //! - Duplicate labels (bug + trap overlap) are deduplicated before DB writes.
 //! - Existing chains are reinforced, not duplicated.
 
+#[cfg(feature = "sqlite")]
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::{ConsolidationError, SchemaError};
+#[cfg(feature = "sqlite")]
 use crate::m2_schema::m07_causal_chain::{find_by_label, insert_chain, reinforce_chain};
+#[cfg(feature = "sqlite")]
 use crate::m2_schema::m10b_checkpoint::{insert_checkpoint, CheckpointInsert};
 
 // ---------------------------------------------------------------------------
@@ -155,6 +159,7 @@ pub struct IngestResult {
 ///
 /// Returns [`ConsolidationError`] if writing to the database fails or if the
 /// transaction cannot be started or committed.
+#[cfg(feature = "sqlite")]
 pub fn ingest_checkpoint(
     conn: &Connection,
     data: &CheckpointData,
@@ -323,6 +328,7 @@ pub fn extract_trap_references(bullets: &[String], known_traps: &[&str]) -> Vec<
 // ---------------------------------------------------------------------------
 
 /// Build and persist a [`CheckpointInsert`] from [`CheckpointData`].
+#[cfg(feature = "sqlite")]
 fn write_checkpoint(conn: &Connection, data: &CheckpointData) -> Result<i64, ConsolidationError> {
     let mut cp = CheckpointInsert::new(
         data.label.clone(),
@@ -349,6 +355,7 @@ fn write_checkpoint(conn: &Connection, data: &CheckpointData) -> Result<i64, Con
 }
 
 /// Generate a short description for a newly-auto-created chain.
+#[cfg(feature = "sqlite")]
 fn auto_description(label: &str, chain_type: &str, session_number: Option<u32>) -> String {
     let session_tag = session_number
         .map(|n| format!(" (first seen S{n})"))
@@ -357,6 +364,7 @@ fn auto_description(label: &str, chain_type: &str, session_number: Option<u32>) 
 }
 
 /// Map a [`SchemaError`] to a [`ConsolidationError`].
+#[cfg(feature = "sqlite")]
 fn schema_to_consolidation(e: &SchemaError, label: &str) -> ConsolidationError {
     ConsolidationError::CheckpointIngestFailed {
         label: label.to_owned(),
@@ -368,7 +376,7 @@ fn schema_to_consolidation(e: &SchemaError, label: &str) -> ConsolidationError {
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;

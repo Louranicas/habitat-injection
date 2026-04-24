@@ -11,11 +11,14 @@
 //! Implemented by: Historian + Practitioner (circle deliberation S109)
 //! Session: S110
 
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, OptionalExtension as _, Row, params};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::SchemaError;
 
+#[cfg(feature = "sqlite")]
 use super::sqlite_err;
 
 // ---------------------------------------------------------------------------
@@ -54,6 +57,7 @@ pub struct WorkstreamRow {
 // Private helpers
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "sqlite")]
 fn row_to_workstream(row: &Row<'_>) -> rusqlite::Result<WorkstreamRow> {
     Ok(WorkstreamRow {
         ws_id: row.get(0)?,
@@ -69,6 +73,7 @@ fn row_to_workstream(row: &Row<'_>) -> rusqlite::Result<WorkstreamRow> {
     })
 }
 
+#[cfg(feature = "sqlite")]
 const SELECT_COLS: &str =
     "ws_id, title, status, blocker, priority, last_touched_session, \
      items_total, items_done, resume_context, consent";
@@ -87,6 +92,7 @@ const SELECT_COLS: &str =
 ///
 /// Returns [`SchemaError::Sqlite`] on any `rusqlite` failure, including a
 /// `UNIQUE` violation on `ws_id`.
+#[cfg(feature = "sqlite")]
 pub fn insert_workstream(
     conn: &Connection,
     ws_id: &str,
@@ -113,6 +119,7 @@ pub fn insert_workstream(
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error, including a
 /// `CHECK` constraint violation for an invalid `status` value.
+#[cfg(feature = "sqlite")]
 pub fn update_status(
     conn: &Connection,
     ws_id: &str,
@@ -137,6 +144,7 @@ pub fn update_status(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn set_blocker(
     conn: &Connection,
     ws_id: &str,
@@ -162,6 +170,7 @@ pub fn set_blocker(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn clear_blocker(
     conn: &Connection,
     ws_id: &str,
@@ -185,6 +194,7 @@ pub fn clear_blocker(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn get_active(conn: &Connection) -> Result<Vec<WorkstreamRow>, SchemaError> {
     let mut stmt = conn
         .prepare(&format!(
@@ -206,6 +216,7 @@ pub fn get_active(conn: &Connection) -> Result<Vec<WorkstreamRow>, SchemaError> 
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn get_blocked(conn: &Connection) -> Result<Vec<WorkstreamRow>, SchemaError> {
     let mut stmt = conn
         .prepare(&format!(
@@ -229,6 +240,7 @@ pub fn get_blocked(conn: &Connection) -> Result<Vec<WorkstreamRow>, SchemaError>
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn touch(conn: &Connection, ws_id: &str, session: u32) -> Result<bool, SchemaError> {
     let rows = conn
         .execute(
@@ -246,6 +258,7 @@ pub fn touch(conn: &Connection, ws_id: &str, session: u32) -> Result<bool, Schem
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn get_by_id(
     conn: &Connection,
     ws_id: &str,
@@ -268,6 +281,7 @@ pub fn get_by_id(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn update_progress(
     conn: &Connection,
     ws_id: &str,
@@ -291,6 +305,7 @@ pub fn update_progress(
 /// # Errors
 ///
 /// Returns [`SchemaError::Sqlite`] on any database error.
+#[cfg(feature = "sqlite")]
 pub fn count_by_status(conn: &Connection, status: &str) -> Result<u64, SchemaError> {
     let count: i64 = conn
         .query_row(
@@ -306,17 +321,19 @@ pub fn count_by_status(conn: &Connection, status: &str) -> Result<u64, SchemaErr
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use crate::m2_schema::m06_schema::open_memory;
 
     // ---- helpers ----
 
+#[cfg(feature = "sqlite")]
     fn db() -> Connection {
         open_memory().expect("open_memory should never fail in tests")
     }
 
+#[cfg(feature = "sqlite")]
     fn insert_basic(conn: &Connection, ws_id: &str, status: &str) {
         insert_workstream(conn, ws_id, "Test Title", status, 109, "resume ctx")
             .expect("insert should succeed");
@@ -325,12 +342,14 @@ mod tests {
     // ---- insert_workstream ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_basic_succeeds() {
         let conn = db();
         assert!(insert_workstream(&conn, "ws-1", "Title", "active", 109, "ctx").is_ok());
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_round_trip_via_get_by_id() {
         let conn = db();
         insert_workstream(&conn, "ws-rt", "RT Title", "active", 110, "resume").unwrap();
@@ -343,6 +362,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_defaults_priority_5() {
         let conn = db();
         insert_basic(&conn, "ws-p", "active");
@@ -351,6 +371,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_defaults_consent_emit() {
         let conn = db();
         insert_basic(&conn, "ws-c", "active");
@@ -359,6 +380,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_blocker_is_null_by_default() {
         let conn = db();
         insert_basic(&conn, "ws-b", "active");
@@ -367,6 +389,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_items_null_by_default() {
         let conn = db();
         insert_basic(&conn, "ws-i", "active");
@@ -376,6 +399,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_duplicate_ws_id_fails() {
         let conn = db();
         insert_basic(&conn, "ws-dup", "active");
@@ -384,6 +408,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_invalid_status_fails() {
         let conn = db();
         let result = insert_workstream(&conn, "ws-bad", "T", "invalid_status", 1, "ctx");
@@ -391,6 +416,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn insert_all_valid_statuses() {
         let conn = db();
         for status in &["active", "blocked", "deferred", "complete"] {
@@ -405,6 +431,7 @@ mod tests {
     // ---- get_by_id ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_id_missing_returns_none() {
         let conn = db();
         let row = get_by_id(&conn, "no-such-ws").unwrap();
@@ -412,6 +439,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_by_id_after_insert_returns_some() {
         let conn = db();
         insert_basic(&conn, "ws-exist", "active");
@@ -422,6 +450,7 @@ mod tests {
     // ---- update_status ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_status_changes_status() {
         let conn = db();
         insert_basic(&conn, "ws-us", "active");
@@ -432,6 +461,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_status_touches_session() {
         let conn = db();
         insert_basic(&conn, "ws-ts", "active");
@@ -441,6 +471,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_status_missing_returns_false() {
         let conn = db();
         let found = update_status(&conn, "no-ws", "active", 1).unwrap();
@@ -448,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_status_invalid_status_fails() {
         let conn = db();
         insert_basic(&conn, "ws-inv", "active");
@@ -456,6 +488,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_status_all_transitions() {
         let conn = db();
         insert_basic(&conn, "ws-trans", "active");
@@ -469,6 +502,7 @@ mod tests {
     // ---- set_blocker ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn set_blocker_sets_status_to_blocked() {
         let conn = db();
         insert_basic(&conn, "ws-sb", "active");
@@ -483,6 +517,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn set_blocker_touches_session() {
         let conn = db();
         insert_basic(&conn, "ws-sbts", "active");
@@ -492,6 +527,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn set_blocker_missing_ws_returns_false() {
         let conn = db();
         let found = set_blocker(&conn, "ghost", "whatever", 1).unwrap();
@@ -499,6 +535,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn set_blocker_on_already_blocked() {
         let conn = db();
         insert_basic(&conn, "ws-sab", "blocked");
@@ -510,6 +547,7 @@ mod tests {
     // ---- clear_blocker ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn clear_blocker_sets_status_to_active() {
         let conn = db();
         insert_basic(&conn, "ws-cb", "blocked");
@@ -522,6 +560,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn clear_blocker_touches_session() {
         let conn = db();
         insert_basic(&conn, "ws-cbts", "blocked");
@@ -531,6 +570,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn clear_blocker_missing_ws_returns_false() {
         let conn = db();
         let found = clear_blocker(&conn, "phantom", 1).unwrap();
@@ -538,6 +578,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn clear_blocker_nulls_blocker_field() {
         let conn = db();
         insert_basic(&conn, "ws-null", "active");
@@ -550,6 +591,7 @@ mod tests {
     // ---- set_blocker / clear_blocker round-trip ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn blocker_round_trip() {
         let conn = db();
         insert_basic(&conn, "ws-rtp", "active");
@@ -570,6 +612,7 @@ mod tests {
     // ---- get_active ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_active_returns_only_active() {
         let conn = db();
         insert_basic(&conn, "ws-a1", "active");
@@ -583,6 +626,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_active_empty_when_none() {
         let conn = db();
         let active = get_active(&conn).unwrap();
@@ -590,6 +634,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_active_ordered_by_priority_asc() {
         let conn = db();
         insert_basic(&conn, "ws-p3", "active");
@@ -617,6 +662,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_active_excludes_blocked() {
         let conn = db();
         insert_basic(&conn, "ws-excl", "blocked");
@@ -627,6 +673,7 @@ mod tests {
     // ---- get_blocked ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_blocked_returns_only_blocked() {
         let conn = db();
         insert_basic(&conn, "ws-gb1", "blocked");
@@ -638,6 +685,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_blocked_empty_when_none() {
         let conn = db();
         let blocked = get_blocked(&conn).unwrap();
@@ -645,6 +693,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn get_blocked_contains_blocker_text() {
         let conn = db();
         insert_basic(&conn, "ws-bt", "active");
@@ -657,6 +706,7 @@ mod tests {
     // ---- touch ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn touch_updates_session() {
         let conn = db();
         insert_basic(&conn, "ws-touch", "active");
@@ -667,6 +717,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn touch_does_not_change_status() {
         let conn = db();
         insert_basic(&conn, "ws-tncs", "deferred");
@@ -676,6 +727,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn touch_missing_ws_returns_false() {
         let conn = db();
         let found = touch(&conn, "no-ws", 1).unwrap();
@@ -685,6 +737,7 @@ mod tests {
     // ---- update_progress ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_progress_sets_items() {
         let conn = db();
         insert_basic(&conn, "ws-up", "active");
@@ -696,6 +749,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_progress_touches_session() {
         let conn = db();
         insert_basic(&conn, "ws-upts", "active");
@@ -705,6 +759,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_progress_missing_returns_false() {
         let conn = db();
         let found = update_progress(&conn, "ghost", 1, 5, 1).unwrap();
@@ -712,6 +767,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_progress_to_complete() {
         let conn = db();
         insert_basic(&conn, "ws-done", "active");
@@ -722,6 +778,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn update_progress_overwrites_previous() {
         let conn = db();
         insert_basic(&conn, "ws-ovr", "active");
@@ -734,6 +791,7 @@ mod tests {
     // ---- count_by_status ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_by_status_active() {
         let conn = db();
         insert_basic(&conn, "ws-ca1", "active");
@@ -743,6 +801,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_by_status_blocked() {
         let conn = db();
         insert_basic(&conn, "ws-blk1", "blocked");
@@ -750,12 +809,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_by_status_returns_zero_when_empty() {
         let conn = db();
         assert_eq!(count_by_status(&conn, "complete").unwrap(), 0);
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_by_status_unknown_status_returns_zero() {
         let conn = db();
         insert_basic(&conn, "ws-cunk", "active");
@@ -763,6 +824,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn count_by_status_all_statuses() {
         let conn = db();
         for (i, status) in ["active", "blocked", "deferred", "complete"]
@@ -781,6 +843,7 @@ mod tests {
     // ---- serde round-trip for WorkstreamRow ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn workstream_row_serde_roundtrip() {
         let conn = db();
         insert_basic(&conn, "ws-serde", "active");
@@ -793,6 +856,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn workstream_row_debug_not_empty() {
         let conn = db();
         insert_basic(&conn, "ws-dbg", "active");
@@ -805,6 +869,7 @@ mod tests {
     // ---- composite scenarios ----
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn full_lifecycle_active_blocked_active() {
         let conn = db();
         insert_workstream(&conn, "ws-life", "Full lifecycle", "active", 109, "start ctx")
@@ -822,6 +887,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn priority_ordering_preserved_across_insertions() {
         let conn = db();
         // insert in descending priority order
@@ -842,6 +908,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn multiple_blocked_workstreams_all_returned() {
         let conn = db();
         for i in 0..5 {
@@ -854,6 +921,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
     fn touch_updates_without_affecting_other_fields() {
         let conn = db();
         insert_workstream(&conn, "ws-touch2", "Stable", "deferred", 109, "ctx for resume")
