@@ -1,0 +1,9 @@
+{
+  "error_handling": "thiserror + Result<T, Error>",
+  "concurrency": "parking_lot::RwLock + Arc",
+  "config": "Figment TOML + env",
+  "serialization": "serde derive",
+  "logging": "tracing (not log)",
+  "identifiers": "uuid v4",
+  "time": "chrono DateTime<Utc>"
+}

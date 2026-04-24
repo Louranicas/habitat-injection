@@ -1,0 +1,8 @@
+# habitat-injection — Default Configuration
+
+[server]
+bind_addr = "127.0.0.1"
+port = 8080
+
+[persistence]
+data_dir = "data/"

@@ -1,0 +1,16 @@
+[services.habitat-injection]
+name = "habitat-injection v0.1.0"
+command = "./bin/habitat-injection"
+auto_start = true
+auto_restart = true
+max_restart_attempts = 5
+health_check_url = "http://localhost:8080/health"
+health_check_interval_secs = 30
+startup_timeout_secs = 60
+
+[services.habitat-injection.env]
+RUST_LOG = "info"
+
+[services.habitat-injection.resource_limits]
+max_memory_mb = 128
+max_cpu_percent = 50

@@ -1,0 +1,10 @@
+{
+  "never": [
+    "unwrap() in production",
+    "unsafe blocks",
+    "stdout in daemons",
+    "global mutable state",
+    "suppress clippy warnings",
+    "panic-based error handling"
+  ]
+}

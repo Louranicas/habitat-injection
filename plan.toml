@@ -1,0 +1,516 @@
+# ═══════════════════════════════════════════════════════════════
+# Habitat Memory Injection System — plan.toml v1
+# ═══════════════════════════════════════════════════════════════
+#
+# Origin:       Circle of Experts deliberation (2026-04-24)
+#               10 CC instances, 4 rounds, 48 argument files, 384 KB
+# Consensus:    5 tables, SQLite Phase 1, STDB Phase 2
+# Gold exemplar: /home/louranicas/claude-code-workspace/dev-ops-engine-v3/
+# Architecture:  /home/louranicas/claude-code-workspace/synthex-v2/
+# Schema source: scaffold-mastery skill + V3 plan.toml (510 lines)
+# ULTRA-PLATE:   Full compliance (32 mandatory rules, 4-stage gate, god-tier)
+#
+# Port:         None (CLI tools, not a daemon — Phase 1)
+#               Port 3000 (STDB) + 3001 (ingester) reserved for Phase 2
+# DevEnv Batch: N/A Phase 1 (no daemon); Batch 1 Phase 2
+#
+# Usage: scaffold-gen --from-plan plan.toml /home/louranicas/claude-code-workspace/memory-injection
+
+[metadata]
+name = "habitat-injection"
+description = "Memory injection system for Claude Code — <2KB causal state in <100ms at session start. Deliberated by 10 CC instances across 4 rounds. SQLite Phase 1, SpaceTimeDB Phase 2."
+version = "0.1.0"
+edition = "2024"
+rust_version = "1.93"
+service_id = "habitat-injection"
+devenv_batch = 0                    # No daemon in Phase 1
+license = "proprietary"
+authors = [
+    "Luke O'Mahoney <lukeomahoney@gmail.com> (node 0.A)",
+    "Claude (cortex) — Orchestrator + Synthesizer",
+    "Memory Scientist (ALPHA-Left)",
+    "CLI Craftsman (ALPHA-TopRight)",
+    "Substrate Guardian (ALPHA-BotRight)",
+    "Practitioner (BETA-Left)",
+    "Historian (BETA-BotRight)",
+    "Security Architect (GAMMA-Left)",
+    "Performance Engineer (GAMMA-TopRight)",
+    "The Watcher (GAMMA-BotRight)",
+    "Adversary (Command-2)"
+]
+repository = ""
+keywords = ["memory", "injection", "bootstrap", "causal-chain", "hebbian", "habitat", "claude-code"]
+categories = ["development-tools", "database"]
+readme = "README.md"
+
+# ═══════════════════════════════════════════════════════════════
+# DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+thiserror = { version = "2" }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], optional = true }
+tokio = { version = "1.35", features = ["full"], optional = true }
+axum = { version = "0.8", features = ["json"], optional = true }
+tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
+spacetimedb-sdk = { version = "2.1", optional = true }
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+tokio-test = { version = "0.4" }
+proptest = { version = "1" }
+tempfile = { version = "3" }
+serial_test = { version = "3" }
+assert_cmd = { version = "2" }
+predicates = { version = "3" }
+
+# ═══════════════════════════════════════════════════════════════
+# FEATURE FLAGS (phase-gated activation)
+# ═══════════════════════════════════════════════════════════════
+
+[features]
+default = ["sqlite", "cli"]
+
+# Phase 1 features (ship this week)
+sqlite = ["rusqlite"]
+cli = ["clap"]
+
+# Phase 2 features (when justified)
+stdb = ["spacetimedb-sdk", "tokio", "reqwest"]
+ingester = ["stdb", "tokio", "reqwest", "axum", "tower-http"]
+watcher-digest = ["stdb"]
+
+# Phase 3 features (when pressure demands)
+inhibition = []
+substrate-reciprocal = ["reqwest"]
+
+# Meta
+full = ["sqlite", "cli", "stdb", "ingester", "watcher-digest", "inhibition", "substrate-reciprocal"]
+
+# ═══════════════════════════════════════════════════════════════
+# QUALITY GATE (ULTRA-PLATE — zero tolerance)
+# ═══════════════════════════════════════════════════════════════
+
+[quality]
+gate = ["check", "clippy", "pedantic", "test"]
+min_tests_per_module = 50
+deny_unwrap = true
+deny_unsafe = true
+k7_compliance = true
+hebbian_feedback = true
+
+# ═══════════════════════════════════════════════════════════════
+# CONSENT CONFIGURATION (from Circle of Experts deliberation)
+# ═══════════════════════════════════════════════════════════════
+
+[consent]
+sphere_can_add_modules = true
+sphere_can_skip_layers = false
+modulation_not_command = true
+implementation_order = "L1,L2,L3,L4,L5,L6"
+consent_column_mandatory = true     # Every table carries ConsentLevel
+consent_levels = ["Emit", "Store", "Forget"]
+injection_filter = "Emit"           # Only Emit-consented data enters injection payload
+
+# ═══════════════════════════════════════════════════════════════
+# DELIBERATION PROVENANCE
+# ═══════════════════════════════════════════════════════════════
+
+[deliberation]
+method = "Circle of Experts"
+rounds = 4
+participants = 10
+files_produced = 48
+total_kb = 384
+consensus_tables = 6  # 5 from Circle + session_checkpoint from /save-session integration
+settled_principles = 7
+key_table = "causal_chain"
+key_query = "SELECT label, reinforcement_count FROM causal_chain WHERE resolved_session IS NULL ORDER BY reinforcement_count DESC LIMIT 5"
+adversary_concession = "CausalChain + cascade_forget"
+kill_criteria = "20 sessions without measurable improvement → revert to SQLite"
+
+# ═══════════════════════════════════════════════════════════════
+# 6 LAYERS
+# ═══════════════════════════════════════════════════════════════
+
+[[layers]]
+key = "L1"
+dir_name = "m1_foundation"
+name = "Foundation"
+description = "Core types (SessionId, WorkstreamId, ChainId, ConsentLevel, PatternWeight), error taxonomy, config, constants, traits (Injectable, Consolidatable, Queryable), validation. No upward imports."
+depends_on = []
+rationale = "Foundation-first: every other layer depends on these types and traits. Gold standard pattern from V3 L1."
+
+[[layers]]
+key = "L2"
+dir_name = "m2_schema"
+name = "Schema & Persistence"
+description = "SQLite schema creation, migration runner, 6 table definitions (causal_chain, session_trajectory, workstream, reinforced_pattern, injection_cache, session_checkpoint), CRUD operations, query builders, index management."
+depends_on = ["L1"]
+rationale = "Schema before logic — tables must exist before anything reads or writes them. Phase 2: STDB module definitions mirror these exactly."
+
+[[layers]]
+key = "L3"
+dir_name = "m3_injection"
+name = "Injection Engine"
+description = "SessionStart injection pipeline: parallel query executor, prose renderer (<2KB budget), three-tier fallback (SQLite → atuin KV → static), staleness annotation, consent filtering, token counting."
+depends_on = ["L1", "L2"]
+rationale = "The core deliverable — what Claude Code receives at context window start. Pipeline-first architecture from CLI Craftsman."
+
+[[layers]]
+key = "L4"
+dir_name = "m4_consolidation"
+name = "Consolidation Engine"
+description = "Post-session write-back: /save-session checkpoint ingest, trajectory capture, workstream update, causal chain reinforcement, Hebbian decay (0.95× unfired), pattern reinforcement (0.1×(1-w) fired), auto-resolve after 10 quiet sessions, injection_cache rebuild, atuin KV cache."
+depends_on = ["L1", "L2"]
+rationale = "Without consolidation, the tables are filing cabinets (CLI Craftsman Round 4). Decay + reinforcement is what makes the schema alive."
+
+[[layers]]
+key = "L5"
+dir_name = "m5_query"
+name = "Query & Browser"
+description = "Interactive memory browser: preset queries (trajectory, chains, workstreams, patterns), raw SQL passthrough, fzf integration, formatted output, atuin script registration."
+depends_on = ["L1", "L2"]
+rationale = "On-demand exploration. The habitat-query tool that lets Claude investigate its own memory during a session."
+
+[[layers]]
+key = "L6"
+dir_name = "m6_stdb"
+name = "SpaceTimeDB Migration"
+description = "Phase 2: STDB module (5 tables in Rust), ingester binary (ORAC/PV2/SYNTHEX/POVM bridges), cascade_forget reducer, watcher_digest table, schedule-table reducers for injection_cache rebuild."
+depends_on = ["L1", "L2", "L3", "L4"]
+rationale = "Deferred by Adversary consensus — only ships when Watcher needs real-time subscriptions or cascade_forget justifies STDB's operational cost."
+
+# ═══════════════════════════════════════════════════════════════
+# 24 MODULES
+# ═══════════════════════════════════════════════════════════════
+
+# --- L1: Foundation (5 modules) ---
+
+[[modules]]
+layer = "L1"
+name = "m01_types"
+description = "Newtypes: SessionId(u32), WorkstreamId(String), ChainId(u64), PatternId(String), ConsentLevel(Emit|Store|Forget), PatternWeight(f64 clamped 0.0-1.0), TokenBudget(u32). All Display + Serialize + Deserialize."
+test_kind = "unit"
+depends_on = []
+
+[[modules]]
+layer = "L1"
+name = "m02_errors"
+description = "Error taxonomy: InjectionError, ConsolidationError, SchemaError, QueryError, MigrationError. thiserror-derived. #[non_exhaustive] on public enums."
+test_kind = "unit"
+depends_on = ["m01_types"]
+
+[[modules]]
+layer = "L1"
+name = "m03_config"
+description = "Configuration: DB path (~/.local/share/habitat/injection.db), injection budget (default 1100 tokens), decay rate (0.95), reinforce rate (0.1), auto-resolve threshold (10 sessions), cache rebuild interval (60s). TOML + env overlay."
+test_kind = "unit"
+depends_on = ["m01_types"]
+
+[[modules]]
+layer = "L1"
+name = "m04_traits"
+description = "Core traits: Injectable (fn inject(&self, budget: TokenBudget) → Result<String>), Consolidatable (fn consolidate(&mut self, session: SessionId) → Result<()>), Queryable (fn query(&self, sql: &str) → Result<Vec<Row>>), Decayable (fn decay(&mut self, rate: f64) → Result<u32>)."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors"]
+
+[[modules]]
+layer = "L1"
+name = "m05_constants"
+description = "Named constants: DEFAULT_BUDGET=1100, DECAY_RATE=0.95, REINFORCE_RATE=0.1, AUTO_RESOLVE_SESSIONS=10, CACHE_REBUILD_SECS=60, MAX_CHAINS_INJECTED=5, MAX_PATTERNS_INJECTED=10, MAX_TRAJECTORY_POINTS=5, MAX_WORKSTREAMS=10, PRUNE_THRESHOLD=0.05."
+test_kind = "unit"
+depends_on = []
+
+# --- L2: Schema & Persistence (5 modules) ---
+
+[[modules]]
+layer = "L2"
+name = "m06_schema"
+description = "CREATE TABLE statements for all 5 tables. CREATE INDEX statements. Schema version tracking. Migration runner (up/down). Idempotent — safe to call on existing DB."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors"]
+
+[[modules]]
+layer = "L2"
+name = "m07_causal_chain"
+description = "CRUD for causal_chain table. insert_chain, resolve_chain, reinforce_chain (increment count), find_unresolved (ORDER BY reinforcement_count DESC), find_by_label, auto_resolve_stale. The key table from Historian."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+[[modules]]
+layer = "L2"
+name = "m08_trajectory"
+description = "CRUD for session_trajectory table. insert_point, get_recent(n), compute_delta (fitness diff from previous), get_trend (slope across last N). Practitioner's universal table."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+[[modules]]
+layer = "L2"
+name = "m09_workstream"
+description = "CRUD for workstream table. insert_workstream, update_status, set_blocker, clear_blocker, get_active, get_blocked, touch (update last_touched_session). Historian + Practitioner."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+[[modules]]
+layer = "L2"
+name = "m10_pattern"
+description = "CRUD for reinforced_pattern table. insert_pattern, reinforce (weight += 0.1*(1-weight), hit_count++), decay_all (weight *= 0.95 where unfired), prune_weak (DELETE where weight < 0.05), get_top_by_weight. Memory Scientist + Performance Engineer."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+[[modules]]
+layer = "L2"
+name = "m10b_checkpoint"
+description = "CRUD for session_checkpoint table. Ingests /save-session checkpoint data: frontmatter (label, timestamp, pane_id, tab, cwd, git_sha, services_alive, watcher_ready, persona, scope_constraint), accomplished/in_progress/blocked bullets, key_findings, resume_instructions, conversation_anchors. parse_checkpoint_file reads markdown+YAML frontmatter from shared-context/sessions/*.md. insert_checkpoint, get_latest, get_by_session, get_by_label, extract_causal_chains (auto-discovers BUG-* and trap references from accomplished/blocked bullets → inserts into causal_chain table). The bridge between /save-session's 7-surface persistence and the injection database."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema", "m07_causal_chain"]
+
+# --- L3: Injection Engine (4 modules) ---
+
+[[modules]]
+layer = "L3"
+name = "m11_parallel_query"
+description = "Parallel query executor: runs 4 SQLite queries + N curl health probes concurrently. Returns structured results with staleness annotations. Thread pool for SQLite (no async needed — it's local file). CLI Craftsman's TC6 pattern."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m07_causal_chain", "m08_trajectory", "m09_workstream", "m10_pattern"]
+
+[[modules]]
+layer = "L3"
+name = "m12_prose_renderer"
+description = "Converts structured query results → <2KB prose injection payload. 5 sections: orientation (≤80 tokens), trajectory (≤200), workstreams (≤300), causal chains (≤200), health (≤100). Token counting via whitespace split. Practitioner's format."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors"]
+
+[[modules]]
+layer = "L3"
+name = "m13_fallback"
+description = "Three-tier fallback chain: Tier 1 SQLite → Tier 2 atuin KV (habitat.last-injection) → Tier 3 static 'NO STATE'. Each tier returns Option<String>. First Some() wins. CLI Craftsman."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors"]
+
+[[modules]]
+layer = "L3"
+name = "m14_consent_filter"
+description = "Filters all query results by ConsentLevel. Only rows with consent='Emit' pass to renderer. Logs dropped rows (consent='Store'|'Forget') to tracing. Security Architect's contribution."
+test_kind = "unit"
+depends_on = ["m01_types"]
+
+# --- L4: Consolidation Engine (4 modules) ---
+
+[[modules]]
+layer = "L4"
+name = "m15_checkpoint_ingest"
+description = "Ingests /save-session checkpoint data into the injection DB. Watches ~/projects/shared-context/sessions/ for new *.md files (or accepts a path argument). Parses YAML frontmatter + markdown sections. Maps to: (1) session_checkpoint table (full structured record), (2) session_trajectory (extracts fitness/r/thermal from service snapshot section), (3) workstream (extracts in-progress/blocked items with resume instructions), (4) causal_chain (auto-discovers BUG-NNN, trap names, pattern names from accomplished/blocked/key-findings bullets — creates or reinforces chains), (5) reinforced_pattern (extracts 'key findings' as pattern candidates). This is the PRIMARY write path for consolidation — /save-session already captures everything, this module harvests it."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m10b_checkpoint", "m08_trajectory", "m09_workstream", "m07_causal_chain", "m10_pattern"]
+
+[[modules]]
+layer = "L4"
+name = "m15b_trajectory_capture"
+description = "Post-session: captures current ORAC health (curl localhost:8133/health), extracts ralph_fitness/field_r/thermal_t/ltp_ltd_ratio/services_healthy, computes delta_summary vs previous session, inserts into session_trajectory. Fallback when /save-session checkpoint is not available."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m08_trajectory"]
+
+[[modules]]
+layer = "L4"
+name = "m16_hebbian_engine"
+description = "Decay + reinforce algorithm. decay_all: weight *= DECAY_RATE for patterns where last_fired_session < current. reinforce: weight += REINFORCE_RATE * (1 - weight) for fired patterns. prune: DELETE where weight < PRUNE_THRESHOLD. auto_resolve: resolve chains untriggered for AUTO_RESOLVE_SESSIONS. CLI Craftsman + Memory Scientist consensus."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m05_constants", "m07_causal_chain", "m10_pattern"]
+
+[[modules]]
+layer = "L4"
+name = "m17_cache_builder"
+description = "Rebuilds injection_cache table: queries T1-T4 with consent='Emit', renders each section via m12_prose_renderer, counts tokens, writes to injection_cache with computed_at timestamp. Runs post-session and optionally on cron."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema", "m12_prose_renderer"]
+
+[[modules]]
+layer = "L4"
+name = "m18_atuin_cache"
+description = "Writes last successful injection payload to atuin KV as habitat.last-injection. Reads it back for Tier 2 fallback. Uses atuin kv set/get via subprocess (no Rust atuin SDK needed)."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors"]
+
+# --- L5: Query & Browser (3 modules) ---
+
+[[modules]]
+layer = "L5"
+name = "m19_preset_queries"
+description = "Named query presets: trajectory (last 10), chains (unresolved by frequency), workstreams (active+blocked), patterns (top 20 by weight), checkpoints (last 5 session summaries), health (latest per service). Each returns formatted text."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m07_causal_chain", "m08_trajectory", "m09_workstream", "m10_pattern", "m10b_checkpoint"]
+
+[[modules]]
+layer = "L5"
+name = "m20_raw_query"
+description = "Raw SQL passthrough: takes arbitrary SQL string, executes against injection.db, returns formatted results (header + separator + rows). Safety: read-only connection (SQLITE_OPEN_READ_ONLY)."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+[[modules]]
+layer = "L5"
+name = "m21_fzf_browser"
+description = "Interactive fzf-powered memory browser. Pipes table contents through fzf with --preview showing related records. Requires fzf in PATH. Falls back to non-interactive preset display if fzf absent."
+test_kind = "unit"
+depends_on = ["m01_types", "m19_preset_queries"]
+
+[[modules]]
+layer = "L5"
+name = "m21b_scripts_engine"
+description = "Atuin-compatible scripts engine backed by injection.db. Stores, manages, and runs scripts just like `atuin scripts` but from the injection database. Scripts table: (id, name, description, tags, shebang, script_body, template_vars_json, created_at, last_run, run_count, consent). Commands: habitat-db-scripts new/list/run/get/edit/delete. Template variable substitution via {{VAR}} syntax. Scripts can query the injection DB directly (special __DB_PATH__ template var injected automatically). Integration: scripts registered here are ALSO auto-registered with atuin via `atuin scripts new` for dual-surface availability. Use case: injection-aware scripts that query causal_chain, trajectory, patterns at runtime — e.g. a script that checks 'am I about to repeat a known trap?' before starting work."
+test_kind = "unit"
+depends_on = ["m01_types", "m02_errors", "m06_schema"]
+
+# --- L6: SpaceTimeDB Migration (3 modules, Phase 2) ---
+
+[[modules]]
+layer = "L6"
+name = "m22_stdb_module"
+description = "SpaceTimeDB WASM module: 5 table definitions (Rust #[spacetimedb::table]), 6 reducers (ingest_event, reinforce_edge, capture_gradient, register_session, run_decay, forget_sphere), schedule tables for decay + cache rebuild. Compiles to wasm32-unknown-unknown."
+test_kind = "unit"
+depends_on = ["m01_types"]
+feature_gate = "stdb"
+
+[[modules]]
+layer = "L6"
+name = "m23_ingester"
+description = "Multi-source ingester binary: polls ORAC (30s), subscribes PV2 /bus/ws, polls SYNTHEX (60s), syncs POVM (300s). Calls STDB reducers via SDK. Exposes health on :3001. Long-running tokio process."
+test_kind = "integration"
+depends_on = ["m01_types", "m02_errors", "m22_stdb_module"]
+feature_gate = "ingester"
+
+[[modules]]
+layer = "L6"
+name = "m24_migration"
+description = "One-shot SQLite → STDB migration. Reads all 5 SQLite tables, calls STDB reducers to populate. Verification checksums (count + weight aggregates). Rollback on mismatch."
+test_kind = "integration"
+depends_on = ["m01_types", "m02_errors", "m06_schema", "m22_stdb_module"]
+feature_gate = "stdb"
+
+# ═══════════════════════════════════════════════════════════════
+# BINARIES
+# ═══════════════════════════════════════════════════════════════
+
+[[bins]]
+name = "habitat-inject"
+description = "SessionStart hook: <2KB injection in <100ms. Three-tier fallback."
+entry = "src/bin/inject.rs"
+install_to = "~/.local/bin/habitat-inject"
+hook = "SessionStart"
+timeout_secs = 3
+
+[[bins]]
+name = "habitat-consolidate"
+description = "Post-session write-back: trajectory + decay + reinforce + cache rebuild."
+entry = "src/bin/consolidate.rs"
+install_to = "~/.local/bin/habitat-consolidate"
+
+[[bins]]
+name = "habitat-query"
+description = "Interactive memory browser with presets and fzf mode."
+entry = "src/bin/query.rs"
+install_to = "~/.local/bin/habitat-query"
+
+[[bins]]
+name = "habitat-init"
+description = "One-time DB setup + seed from existing sources."
+entry = "src/bin/init.rs"
+install_to = "~/.local/bin/habitat-init"
+
+[[bins]]
+name = "habitat-scripts"
+description = "Atuin-compatible scripts engine: new/list/run/get/edit/delete. Memory-aware scripts backed by injection.db."
+entry = "src/bin/scripts.rs"
+install_to = "~/.local/bin/habitat-scripts"
+
+# ═══════════════════════════════════════════════════════════════
+# SCRIPTS (atuin + bash)
+# ═══════════════════════════════════════════════════════════════
+
+[[scripts]]
+name = "habitat-inject.sh"
+description = "Bash wrapper for habitat-inject binary with atuin KV fallback."
+path = "scripts/habitat-inject.sh"
+atuin_register = true
+atuin_tags = ["habitat", "injection", "bootstrap"]
+
+[[scripts]]
+name = "habitat-consolidate.sh"
+description = "Bash wrapper for habitat-consolidate with session number auto-detect."
+path = "scripts/habitat-consolidate.sh"
+atuin_register = true
+atuin_tags = ["habitat", "consolidation", "session"]
+
+[[scripts]]
+name = "habitat-query.sh"
+description = "Bash wrapper for habitat-query with preset shortcuts."
+path = "scripts/habitat-query.sh"
+atuin_register = true
+atuin_tags = ["habitat", "query", "memory"]
+
+[[scripts]]
+name = "habitat-seed.sh"
+description = "Seed initial data from session notes, CLAUDE.local.md, service_tracking.db."
+path = "scripts/habitat-seed.sh"
+atuin_register = true
+atuin_tags = ["habitat", "seed", "migration"]
+
+# ═══════════════════════════════════════════════════════════════
+# TEST MATRIX
+# ═══════════════════════════════════════════════════════════════
+
+[test_matrix]
+unit = { min_per_module = 50, style = "rstest + proptest" }
+integration = { targets = ["inject_e2e", "consolidate_e2e", "query_e2e", "seed_e2e"] }
+property = { targets = ["m01_types", "m10_pattern", "m16_hebbian_engine"] }
+benchmark = { targets = ["inject_latency", "query_latency"] }
+acceptance = [
+    "injection_under_100ms",
+    "injection_under_2kb",
+    "zero_rediscovered_traps_after_5_sessions",
+    "reinforcement_count_incremented",
+    "decay_prunes_stale_patterns",
+    "three_tier_fallback_works"
+]
+
+# ═══════════════════════════════════════════════════════════════
+# DEVENV REGISTRATION (Phase 2 only)
+# ═══════════════════════════════════════════════════════════════
+
+[devenv]
+phase1_services = []                # No daemons in Phase 1
+phase2_services = [
+    { id = "habitat-stdb", port = 3000, batch = 1, command = "spacetimedb-standalone", health = "/v1/identity" },
+    { id = "habitat-stdb-ingester", port = 3001, batch = 2, command = "habitat-stdb-ingester", health = "/health" }
+]
+
+# ═══════════════════════════════════════════════════════════════
+# HOOK REGISTRATION
+# ═══════════════════════════════════════════════════════════════
+
+[hooks]
+session_start = { command = "~/.local/bin/habitat-inject", timeout = 3, position = 3 }
+# Position 3 = after ORAC hook (1) and health-broadcast (2)
+
+# ═══════════════════════════════════════════════════════════════
+# KILL CRITERIA (Adversary's demand)
+# ═══════════════════════════════════════════════════════════════
+
+[kill_criteria]
+eval_sessions = 20
+metrics = [
+    "zero_rediscovered_traps",
+    "reinforcement_count_active",
+    "injection_latency_under_100ms",
+    "injection_size_under_2kb"
+]
+action_on_fail = "revert to SQLite, delete STDB module"

@@ -1,0 +1,7 @@
+{
+  "project": "habitat-injection",
+  "layers": 6,
+  "modules": 24,
+  "quality_gate": "check + clippy + pedantic + test",
+  "implementation_order": ["L1", "L2", "L3", "L4", "L5", "L6"]
+}

@@ -1,0 +1,236 @@
+{
+  "main": {
+    "id": "48547c07fffa0dc3",
+    "type": "split",
+    "children": [
+      {
+        "id": "7408fcc9d6cb3172",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cb0b75b8ef789046",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "MASTER INDEX.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "MASTER INDEX"
+            }
+          },
+          {
+            "id": "e9bfcac64b7efad3",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "schemas/T8 — WatcherObservation.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "T8 — WatcherObservation"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "6aa07c204a96ecfb",
+    "type": "split",
+    "children": [
+      {
+        "id": "edb333feab102b97",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cb807644a6450267",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "dc649af7846c0735",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "220551173f766832",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "0eef3d877b64220f",
+    "type": "split",
+    "children": [
+      {
+        "id": "6d85c0b259c1d763",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3e7a07d89a5ae356",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "35b100734dcc0083",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "bbd12621dd8d5f33",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "aabc465e76b88609",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "b5db756d0feb3120",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "cb0b75b8ef789046",
+  "lastOpenFiles": [
+    "HOME.md",
+    "schemas/T9 — ServiceSession.md",
+    "schemas/T9 — ServiceSession.md.tmp.2588253.1777009584602",
+    "deliberation/SYNTHESIS.md",
+    "deliberation/ROUND4-GAMMA-BotRight.md",
+    "deliberation/ROUND3-GAMMA-TopRight.md",
+    "deliberation/ROUND3-GAMMA-Left.md",
+    "deliberation/ROUND3-GAMMA-BotRight.md",
+    "deliberation/ROUND3-BETA-Left.md",
+    "deliberation/ROUND3-BETA-BotRight.md",
+    "deliberation/ROUND3-ALPHA-TopRight.md",
+    "deliberation/ROUND3-ALPHA-Left.md",
+    "deliberation/ROUND3-ALPHA-BotRight.md",
+    "deliberation/ROUND2-GAMMA-TopRight.md",
+    "deliberation/ROUND2-GAMMA-Left.md",
+    "deliberation/ROUND2-GAMMA-BotRight.md",
+    "deliberation/ROUND2-Command-2.md",
+    "deliberation/ROUND2-BETA-Left.md",
+    "deliberation/ROUND2-BETA-BotRight.md",
+    "deliberation/ROUND2-ALPHA-TopRight.md",
+    "deliberation/ROUND2-ALPHA-Left.md",
+    "deliberation/ROUND2-ALPHA-BotRight.md",
+    "deliberation/PERSONA-GAMMA-TopRight.md",
+    "deliberation/PERSONA-GAMMA-Left.md",
+    "deliberation/PERSONA-GAMMA-BotRight.md",
+    "deliberation/PERSONA-Command-2.md",
+    "deliberation/PERSONA-BETA-TopRight.md",
+    "deliberation",
+    "DELIBERATION PLAN.md.tmp.2587206.1777006786398",
+    "HOME.md.tmp.2587206.1777003520082",
+    "HOME.md.tmp.2587206.1777003502178",
+    "MASTER INDEX.md.tmp.2587206.1777003489829",
+    "MASTER INDEX.md.tmp.2587206.1777003478447",
+    "MASTER INDEX.md.tmp.2587206.1777003466197",
+    "schematics/Proposed Directory Tree.md.tmp.2587206.1777003315251",
+    "MASTER INDEX.md.tmp.2587206.1777002821241"
+  ]
+}
