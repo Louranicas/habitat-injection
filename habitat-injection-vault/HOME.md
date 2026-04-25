@@ -3,7 +3,8 @@
 # Habitat Injection — Vault Index
 
 > **Package:** `habitat-injection` | **Directory:** `~/claude-code-workspace/memory-injection/`
-> **Architecture:** 6 layers, 27 modules | **Phase:** Library COMPLETE (1696 tests), CLI + deployment pending
+> **Architecture:** 6 layers, 27 modules | **Phase:** PIPELINE LIVE — injection firing at session start
+> **Database:** `~/.local/share/habitat/injection.db` — 47 chains, 23 sessions, 80 patterns, 15 workstreams
 > **Quality gate:** `cargo check` + `clippy -D warnings` + `clippy pedantic` + `cargo test --lib`
 > **Origin:** Circle of Experts deliberation (10 CC instances, 4 rounds, 48 arguments, 384 KB)
 
@@ -35,6 +36,11 @@
 - [[Hebbian Learning]] — decay (0.95x unfired) + reinforce (0.1x(1-w) fired) + prune (<0.05)
 
 ### Schematics
+- [[Complete Wiring Schematic]] — **MASTER** — full system topology, all binaries, services, databases, hook chain, consent wiring (20 Mermaid diagrams)
+- [[API Endpoints Map]] — every HTTP endpoint consumed, served, and planned with port registry
+- [[Hebbian Lifecycle Wiring]] — 4-step consolidation cycle, weight trajectories, chain discovery pipeline
+- [[Injection Payload Format]] — exact <2KB output format, token budgets, overflow strategy, render pipeline
+- [[STDB Phase 2 Wiring]] — 8 table mirrors, 5 ingester sources, 11 reducers, migration pipeline
 - [[Schema Diagram]] — 6 SQLite tables with relationships
 - [[Injection Pipeline]] — SessionStart hook chain and latency budget
 - [[Three-Tier Fallback]] — SQLite -> atuin KV -> static fallback chain
@@ -45,14 +51,22 @@
 - [[CLI Binary Architecture]] — 4 binaries, dependency map, sequence diagrams
 - [[Deployment Checklist]] — step-by-step checklist with acceptance criteria
 
-### Operations
-- [[Binary Map]] — 5 binaries: inject, consolidate, query, init, scripts
-- [[Hook Registration]] — SessionStart hook wiring in settings.json
+### Operations & Diagnostics
+- [[System Verification Report]] — **S111 VERIFIED** — full pipeline test: DB integrity, cache, hook, all 6 binaries, Hebbian cycle
+- [[Diagnostics Runbook]] — symptom → diagnosis → fix for every failure mode, health check script, PRAGMA settings
+- [[Fidelity Tuning Guide]] — Hebbian weight calibration, convergence math, tuning scenarios, quality metrics
+- [[Habitat Assimilation Guide]] — ecosystem integration, POVM namespaces, memory substrate map, bidirectional bridge map
+- [[Binary Map]] — 6 binaries: init, inject, seed, consolidate, query, memory
+- [[Hook Registration]] — SessionStart hook wiring in settings.json (position 3)
 - [[Quality Gate Protocol]] — 5-stage zero-tolerance gate (incl. no-default-features)
 - [[Deliberation Record]] — Circle of Experts provenance and consensus
+- [[Injection Database State]] — live DB: 47 chains, 23 sessions, 80 patterns, 15 workstreams
+- [[CLI Tool Ecosystem]] — nvim/atuin/fzf/lazygit/yazi/bacon + 14 chaining patterns + workspace topology
 
 ### Cross-References
 - [[SpaceTimeDB Plan]] — Phase 2 STDB vault at `memory-injection-vault/`
+- Main vault: `~/projects/claude_code/habitat-injection — Complete Wiring Schematics.md`
+- synthex-v2 vault: `~/claude-code-workspace/synthex-v2/obsidian-synthex-v2/synthex-v2/habitat-injection — Cross-Project Bridge.md`
 
 ---
 
@@ -70,4 +84,4 @@
 
 ---
 
-*Vault created 2026-04-24 | 6 layers, 24 modules, 5 binaries | All notes carry `> Back to: [[HOME]]` for graph connectivity*
+*Vault created 2026-04-24, schematics + operations expanded 2026-04-25 | 6 layers, 27 modules, 6 binaries, PIPELINE LIVE | All notes carry `> Back to: [[HOME]]` for graph connectivity*

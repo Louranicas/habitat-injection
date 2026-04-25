@@ -103,25 +103,36 @@
 
 ---
 
-## 5 — Schematics
+## 5 — Schematics (11 notes, 25+ Mermaid diagrams)
 
 | Note | Diagrams | Covers |
 |------|----------|--------|
-| [[Schema Diagram]] | 1 ER | 6 SQLite tables, FKs, cardinality |
-| [[Injection Pipeline]] | 1 sequence | SessionStart hook -> parallel query -> render -> inject |
-| [[Three-Tier Fallback]] | 1 flowchart | SQLite -> atuin KV -> static fallback |
-| [[Tool Chain Patterns]] | 5 diagrams | TC6-TC10 habitat-injection patterns |
+| [[Complete Wiring Schematic]] | 8 | **MASTER** — full system topology, binaries, services, DB schema, hooks, consent |
+| [[API Endpoints Map]] | 1 | All HTTP endpoints consumed/served, port registry |
+| [[Hebbian Lifecycle Wiring]] | 5 | 4-step cycle, weight trajectories, chain discovery pipeline |
+| [[Injection Payload Format]] | 3 | <2KB output format, token budgets, overflow, render pipeline |
+| [[STDB Phase 2 Wiring]] | 4 | 8 table mirrors, 11 reducers, 5 sources, migration pipeline |
+| [[Schema Diagram]] | 1 | 7 SQLite tables, FKs, cardinality |
+| [[Injection Pipeline]] | 1 | SessionStart hook -> parallel query -> render -> inject |
+| [[Three-Tier Fallback]] | 1 | SQLite -> atuin KV -> static fallback |
+| [[Tool Chain Patterns]] | 5 | TC6-TC10 habitat-injection patterns |
 
 ---
 
-## 6 — Operations
+## 6 — Operations & Diagnostics
 
 | Note | Covers |
 |------|--------|
-| [[Binary Map]] | 5 binaries: habitat-inject, habitat-consolidate, habitat-query, habitat-init, habitat-scripts |
-| [[Hook Registration]] | SessionStart position 3 in ~/.claude/settings.json |
-| [[Quality Gate Protocol]] | 4-stage: check -> clippy -> pedantic -> test |
+| [[System Verification Report]] | **S111 VERIFIED** — DB integrity, cache, hook, all 6 binaries, Hebbian cycle, issues found+fixed |
+| [[Diagnostics Runbook]] | Symptom→diagnosis→fix for every failure mode, health check script, PRAGMA settings, performance targets |
+| [[Fidelity Tuning Guide]] | Hebbian weight calibration, convergence math (equilibrium ~0.667), tuning scenarios, quality metrics |
+| [[Habitat Assimilation Guide]] | Ecosystem integration map, POVM namespaces (10 prefixes), memory substrate integration, Phase 2 roadmap |
+| [[Binary Map]] | 6 binaries: init, inject, seed, consolidate, query, memory |
+| [[Hook Registration]] | SessionStart position 3 in ~/.claude/settings.json, 3s timeout |
+| [[Quality Gate Protocol]] | 5-stage: check -> clippy -> pedantic -> test -> no-default-features |
 | [[Deliberation Record]] | Circle of Experts: 10 instances, 4 rounds, 48 arguments |
+| [[Injection Database State]] | Live DB: 47 chains, 23 sessions, 80 patterns, 15 workstreams |
+| [[CLI Tool Ecosystem]] | nvim/atuin/fzf/lazygit + 14 chaining patterns |
 
 ---
 
@@ -163,7 +174,10 @@
 | Canonical plan | `~/projects/shared-context/SpaceTimeDB Habitat Integration Plan — 2026-04-24.md` |
 | Workspace CLAUDE.md | `~/claude-code-workspace/CLAUDE.md` |
 | Main vault | `~/projects/claude_code/` ([[ULTRAPLATE Master Index]]) |
+| Main vault wiring note | `~/projects/claude_code/habitat-injection — Complete Wiring Schematics.md` |
+| synthex-v2 vault bridge | `~/claude-code-workspace/synthex-v2/obsidian-synthex-v2/synthex-v2/habitat-injection — Cross-Project Bridge.md` |
+| Workspace CLAUDE.local.md | `~/claude-code-workspace/CLAUDE.local.md` § habitat-injection anchors |
 
 ---
 
-*Master Index v1.0 | 2026-04-24 | 6 layers, 24 modules, 5 binaries, 4 scripts | All notes carry `> Back to: [[HOME]]`*
+*Master Index v1.1 | 2026-04-25 | 6 layers, 27 modules, 6 binaries | PIPELINE LIVE | 40 vault notes | All notes carry `> Back to: [[HOME]]`*

@@ -53,20 +53,20 @@ cargo clippy -- -D warnings -W clippy::pedantic  # pedantic lint
 cargo test --lib                     # 1696 tests
 ```
 
-## Phase 3: CLI + Deployment — IN PROGRESS
+## Phase 3: CLI + Deployment — COMPLETE (S111)
 
-See [[Execution Plan]] for full details.
+See [[Execution Plan]] for full details. See [[Injection Database State]] for live state.
 
 | Step | What | Status |
 |------|------|--------|
-| 1 | `habitat-init` binary | PENDING |
-| 2-5 | Data seeding (chains, trajectory, workstreams, patterns) | PENDING |
-| 6 | `habitat-inject` binary (SessionStart hook) | PENDING |
-| 7 | `habitat-consolidate` binary (post-session) | PENDING |
-| 8 | `habitat-query` binary (interactive browser) | PENDING |
-| 9 | Hook wiring (`~/.claude/settings.json`) | PENDING |
+| 1 | `habitat-init` binary | **DONE** — 7 tables, schema v3 |
+| 2-5 | Data seeding (chains, trajectory, workstreams, patterns) | **DONE** — 35+21+12+38 rows |
+| 6 | `habitat-inject` binary (SessionStart hook) | **DONE** — 1188 bytes, 9ms |
+| 7 | `habitat-consolidate` binary (post-session) | **DONE** — Hebbian cycle verified |
+| 8 | `habitat-query` binary (interactive browser) | **DONE** — 5 presets + raw SQL + fzf |
+| 9 | Hook wiring (`~/.claude/settings.json`) | **DONE** — position 3, replaces habitat-bootstrap |
 | 10 | Atuin script registration | PENDING |
-| 11 | 5-session validation | PENDING |
+| 11 | 5-session validation | **IN PROGRESS** — S111 is session 1 of 5 |
 
 ## Phase 4: STDB Migration — DEFERRED
 

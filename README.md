@@ -102,6 +102,8 @@ See `EXECUTION_PLAN.md` for the 11-step deployment plan.
 | Project Vault | `habitat-injection-vault/` |
 | STDB Phase 2 Vault | `memory-injection-vault/` |
 | Schematics | `schematics/` |
+| **Wiring Schematics (Vault)** | `habitat-injection-vault/schematics/Complete Wiring Schematic.md` |
+| **Main Vault Cross-Ref** | `~/projects/claude_code/habitat-injection — Complete Wiring Schematics.md` |
 
 ## License
 

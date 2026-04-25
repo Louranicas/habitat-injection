@@ -7,6 +7,34 @@ description = "Memory injection system for Claude Code — <2KB causal state in 
 authors = ["Luke O'Mahoney <lukeomahoney@gmail.com> (node 0.A)", "Claude (cortex) — Orchestrator + Synthesizer", "Memory Scientist (ALPHA-Left)", "CLI Craftsman (ALPHA-TopRight)", "Substrate Guardian (ALPHA-BotRight)", "Practitioner (BETA-Left)", "Historian (BETA-BotRight)", "Security Architect (GAMMA-Left)", "Performance Engineer (GAMMA-TopRight)", "The Watcher (GAMMA-BotRight)", "Adversary (Command-2)"]
 license = "proprietary"
 
+[[bin]]
+name = "habitat-injection"
+path = "src/bin/main.rs"
+
+[[bin]]
+name = "habitat-init"
+path = "src/bin/habitat_init.rs"
+
+[[bin]]
+name = "habitat-inject"
+path = "src/bin/habitat_inject.rs"
+
+[[bin]]
+name = "habitat-consolidate"
+path = "src/bin/habitat_consolidate.rs"
+
+[[bin]]
+name = "habitat-query"
+path = "src/bin/habitat_query.rs"
+
+[[bin]]
+name = "habitat-seed"
+path = "src/bin/habitat_seed.rs"
+
+[[bin]]
+name = "habitat-memory"
+path = "src/bin/habitat_memory.rs"
+
 [workspace]
 
 [dependencies]
