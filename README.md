@@ -4,9 +4,14 @@ Memory injection system for Claude Code — <2KB causal state in <100ms at sessi
 
 ## Status
 
-**Library:** COMPLETE (27 modules, 1696 tests, 5-stage quality gate clean)
-**CLI binaries:** PENDING (4 binaries + data seeding)
-**Deployment:** PENDING (hook wiring + 5-session validation)
+**Library:** COMPLETE (27 modules, 1689 tests active + 9 ignored, 5-stage quality gate clean)
+**CLI binaries:** DEPLOYED (`~/.local/bin/habitat-{init,inject,consolidate,query}`)
+**Deployment:** LIVE — SessionStart hook wired (position 3/3, timeout=3s)
+**Database:** `~/.local/share/habitat/injection.db` (27 chains, 18 patterns, 7 workstreams, 14 trajectory)
+**Performance:** 236 tokens, 1614 bytes, 2ms latency
+**Remaining:** Step 10 (atuin script registration), Step 11 (5-session validation)
+
+> **Back to:** [Workspace CLAUDE.md](../CLAUDE.md) § Memory Systems #7 · [CLAUDE.local.md](../CLAUDE.local.md) § habitat-injection · Obsidian: [[Session S111 — Watcher Deep Fix + Cross-Pane WCP]]
 
 ## Architecture
 
@@ -87,9 +92,23 @@ This system was designed by a Circle of Experts — 10 Claude Code instances arg
 - **Principle 6:** SQLite Phase 1, STDB Phase 2 — earn your database
 - **Principle 7:** Injection != persistence — different budgets, different failure modes
 
+## Deployment (S112 — Live)
+
+The injection fires at every Claude Code session start via the `SessionStart` hook in `~/.claude/settings.json`:
+
+```
+Hook 1: orac-hook.sh (sphere registration + POVM/RM hydration)
+Hook 2: session-health-broadcast.sh (12x parallel health probes)
+Hook 3: habitat-inject (this system — <2KB prose in <100ms)
+```
+
+**S112 fixes applied:** Cache TTL 60→86400s (was permanently stale), 7 atuin-polluting tests isolated with `#[ignore]`, atuin KV cleaned of test data "payload 2".
+
 ## Remaining Work
 
-See `EXECUTION_PLAN.md` for the 11-step deployment plan.
+Steps 10-11 of `EXECUTION_PLAN.md`:
+- **Step 10:** Register 4 binaries as atuin scripts for discoverability
+- **Step 11:** 5-session validation protocol (measure orientation quality, reinforcement counts, decay pruning)
 
 ## Documentation
 
@@ -104,6 +123,11 @@ See `EXECUTION_PLAN.md` for the 11-step deployment plan.
 | Schematics | `schematics/` |
 | **Wiring Schematics (Vault)** | `habitat-injection-vault/schematics/Complete Wiring Schematic.md` |
 | **Main Vault Cross-Ref** | `~/projects/claude_code/habitat-injection — Complete Wiring Schematics.md` |
+| **Session Note (Obsidian)** | `~/projects/claude_code/Session S111 — Watcher Deep Fix + Cross-Pane WCP.md` |
+| **Workspace CLAUDE.md** | `~/claude-code-workspace/CLAUDE.md` § Memory Systems #7 |
+| **Workspace CLAUDE.local.md** | `~/claude-code-workspace/CLAUDE.local.md` § habitat-injection |
+| **Spellbook** | `~/projects/shared-context/The Spellbook — Claude's Working Journal.md` Entry 110 + 112 |
+| **POVM pathways** | `session_checkpoint_watcher-deep-fix-final`, `obsidian_session_s111_watcher_deep_fix` |
 
 ## License
 

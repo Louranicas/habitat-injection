@@ -35,8 +35,8 @@ pub const REINFORCE_RATE: f64 = 0.1;
 /// Sessions of inactivity before a causal chain auto-resolves.
 pub const AUTO_RESOLVE_SESSIONS: u32 = 10;
 
-/// Injection cache rebuild interval in seconds.
-pub const CACHE_REBUILD_SECS: u64 = 60;
+/// Injection cache rebuild interval in seconds (24h — cache valid until next consolidation run).
+pub const CACHE_REBUILD_SECS: u64 = 86_400;
 
 /// Maximum causal chains injected per bootstrap payload.
 pub const MAX_CHAINS_INJECTED: usize = 5;
@@ -323,8 +323,8 @@ mod tests {
     // -- Interval relationship tests --
 
     #[test]
-    fn cache_rebuild_faster_than_decay() {
-        assert!(CACHE_REBUILD_SECS < DECAY_INTERVAL_SECS);
+    fn cache_rebuild_within_compaction_window() {
+        assert!(CACHE_REBUILD_SECS <= COMPACTION_INTERVAL_SECS);
     }
 
     #[test]

@@ -19,6 +19,33 @@ use crate::m1_foundation::m05_constants::{
 };
 
 // ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/// Errors that can occur during validation of ingester types.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidationError {
+    /// A required field was empty.
+    EmptyField(&'static str),
+    /// A numerical field that must be > 0 was 0.
+    ZeroValue(&'static str),
+    /// A numerical field was outside its allowed bounds.
+    OutOfBounds { field: &'static str, message: String },
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyField(field) => write!(f, "{field} must not be empty"),
+            Self::ZeroValue(field) => write!(f, "{field} must be > 0"),
+            Self::OutOfBounds { field, message } => write!(f, "{field} {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+// ---------------------------------------------------------------------------
 // IngesterConfig
 // ---------------------------------------------------------------------------
 
@@ -76,36 +103,35 @@ impl IngesterConfig {
     ///
     /// # Errors
     ///
-    /// Returns a human-readable `String` describing the first validation
-    /// failure found.
+    /// Returns a [`ValidationError`] describing the first validation failure found.
     #[must_use = "validation result must be checked — ignoring it skips safety checks"]
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), ValidationError> {
         if self.stdb_url.is_empty() {
-            return Err(String::from("stdb_url must not be empty"));
+            return Err(ValidationError::EmptyField("stdb_url"));
         }
         if self.orac_url.is_empty() {
-            return Err(String::from("orac_url must not be empty"));
+            return Err(ValidationError::EmptyField("orac_url"));
         }
         if self.pv2_url.is_empty() {
-            return Err(String::from("pv2_url must not be empty"));
+            return Err(ValidationError::EmptyField("pv2_url"));
         }
         if self.synthex_url.is_empty() {
-            return Err(String::from("synthex_url must not be empty"));
+            return Err(ValidationError::EmptyField("synthex_url"));
         }
         if self.povm_url.is_empty() {
-            return Err(String::from("povm_url must not be empty"));
+            return Err(ValidationError::EmptyField("povm_url"));
         }
         if self.health_port == 0 {
-            return Err(String::from("health_port must be > 0"));
+            return Err(ValidationError::ZeroValue("health_port"));
         }
         if self.orac_poll_secs == 0 {
-            return Err(String::from("orac_poll_secs must be > 0"));
+            return Err(ValidationError::ZeroValue("orac_poll_secs"));
         }
         if self.synthex_poll_secs == 0 {
-            return Err(String::from("synthex_poll_secs must be > 0"));
+            return Err(ValidationError::ZeroValue("synthex_poll_secs"));
         }
         if self.povm_sync_secs == 0 {
-            return Err(String::from("povm_sync_secs must be > 0"));
+            return Err(ValidationError::ZeroValue("povm_sync_secs"));
         }
         Ok(())
     }
@@ -278,6 +304,24 @@ impl IngesterHealth {
 }
 
 // ---------------------------------------------------------------------------
+// ConsentLevel
+// ---------------------------------------------------------------------------
+
+/// Defines the consent level for data retention and injection,
+/// enforcing the Habitat Security Architect's Row-Level Security rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsentLevel {
+    /// Safe for context injection.
+    Emit,
+    /// Persist but never inject into LLM context.
+    Store,
+    /// Schedule for deletion after TTL.
+    Forget,
+    /// Strip from all views immediately.
+    Redact,
+}
+
+// ---------------------------------------------------------------------------
 // IngestableEvent
 // ---------------------------------------------------------------------------
 
@@ -301,6 +345,8 @@ pub struct IngestableEvent {
     pub causal_parent: Option<u64>,
     /// Optional habitat session ID string, e.g. `"S109"`.
     pub session_id: Option<String>,
+    /// Consent classification for prompt injection defense.
+    pub consent: ConsentLevel,
 }
 
 impl IngestableEvent {
@@ -308,30 +354,30 @@ impl IngestableEvent {
     ///
     /// # Errors
     ///
-    /// Returns a human-readable `String` when:
+    /// Returns a [`ValidationError`] when:
     /// - `event_type` is empty.
     /// - `source_service` is empty.
     /// - `severity` exceeds 10.
     /// - `confidence` is outside `[0.0, 1.0]`.
     #[must_use = "validation result must be checked — ignoring it skips safety checks"]
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), ValidationError> {
         if self.event_type.is_empty() {
-            return Err(String::from("event_type must not be empty"));
+            return Err(ValidationError::EmptyField("event_type"));
         }
         if self.source_service.is_empty() {
-            return Err(String::from("source_service must not be empty"));
+            return Err(ValidationError::EmptyField("source_service"));
         }
         if self.severity > 10 {
-            return Err(format!(
-                "severity {} exceeds maximum of 10",
-                self.severity
-            ));
+            return Err(ValidationError::OutOfBounds {
+                field: "severity",
+                message: format!("exceeds maximum of 10 (got {})", self.severity),
+            });
         }
         if !(0.0..=1.0).contains(&self.confidence) {
-            return Err(format!(
-                "confidence {} is outside [0.0, 1.0]",
-                self.confidence
-            ));
+            return Err(ValidationError::OutOfBounds {
+                field: "confidence",
+                message: format!("is outside [0.0, 1.0] (got {})", self.confidence),
+            });
         }
         Ok(())
     }
@@ -424,7 +470,7 @@ mod tests {
         cfg.stdb_url = String::new();
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("stdb_url"));
+        assert!(result.unwrap_err().to_string().contains("stdb_url"));
     }
 
     #[test]
@@ -433,7 +479,7 @@ mod tests {
         cfg.orac_url = String::new();
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("orac_url"));
+        assert!(result.unwrap_err().to_string().contains("orac_url"));
     }
 
     #[test]
@@ -442,7 +488,7 @@ mod tests {
         cfg.pv2_url = String::new();
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("pv2_url"));
+        assert!(result.unwrap_err().to_string().contains("pv2_url"));
     }
 
     #[test]
@@ -451,7 +497,7 @@ mod tests {
         cfg.synthex_url = String::new();
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("synthex_url"));
+        assert!(result.unwrap_err().to_string().contains("synthex_url"));
     }
 
     #[test]
@@ -460,7 +506,7 @@ mod tests {
         cfg.povm_url = String::new();
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("povm_url"));
+        assert!(result.unwrap_err().to_string().contains("povm_url"));
     }
 
     #[test]
@@ -469,7 +515,7 @@ mod tests {
         cfg.health_port = 0;
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("health_port"));
+        assert!(result.unwrap_err().to_string().contains("health_port"));
     }
 
     #[test]
@@ -478,7 +524,7 @@ mod tests {
         cfg.orac_poll_secs = 0;
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("orac_poll_secs"));
+        assert!(result.unwrap_err().to_string().contains("orac_poll_secs"));
     }
 
     #[test]
@@ -487,7 +533,7 @@ mod tests {
         cfg.synthex_poll_secs = 0;
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("synthex_poll_secs"));
+        assert!(result.unwrap_err().to_string().contains("synthex_poll_secs"));
     }
 
     #[test]
@@ -496,7 +542,7 @@ mod tests {
         cfg.povm_sync_secs = 0;
         let result = cfg.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("povm_sync_secs"));
+        assert!(result.unwrap_err().to_string().contains("povm_sync_secs"));
     }
 
     // ------------------------------------------------------------------
@@ -881,6 +927,7 @@ mod tests {
             payload_json: String::from(r#"{"gen":100}"#),
             causal_parent: None,
             session_id: Some(String::from("S109")),
+            consent: ConsentLevel::Emit,
         }
     }
 
@@ -902,7 +949,7 @@ mod tests {
         e.source_service = String::new();
         let result = e.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("source_service"));
+        assert!(result.unwrap_err().to_string().contains("source_service"));
     }
 
     #[test]
@@ -918,7 +965,7 @@ mod tests {
         e.severity = 11;
         let result = e.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("severity"));
+        assert!(result.unwrap_err().to_string().contains("severity"));
     }
 
     #[test]
@@ -955,7 +1002,7 @@ mod tests {
         e.confidence = -0.1;
         let result = e.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("confidence"));
+        assert!(result.unwrap_err().to_string().contains("confidence"));
     }
 
     #[test]

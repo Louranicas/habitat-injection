@@ -8,7 +8,31 @@
         "type": "tabs",
         "children": [
           {
+            "id": "2a838d328a41d0a3",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          },
+          {
             "id": "cb0b75b8ef789046",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Luke ScratchPad-memory-injection-vault.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Luke ScratchPad-memory-injection-vault"
+            }
+          },
+          {
+            "id": "2bfc50a1591c126d",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -35,7 +59,8 @@
               "title": "T8 — WatcherObservation"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -196,7 +221,10 @@
   },
   "active": "cb0b75b8ef789046",
   "lastOpenFiles": [
+    "Luke ScratchPad-memory-injection-vault.md",
     "HOME.md",
+    "MASTER INDEX.md",
+    "schemas/T8 — WatcherObservation.md",
     "schemas/T9 — ServiceSession.md",
     "schemas/T9 — ServiceSession.md.tmp.2588253.1777009584602",
     "deliberation/SYNTHESIS.md",
@@ -220,9 +248,6 @@
     "deliberation/ROUND2-ALPHA-BotRight.md",
     "deliberation/PERSONA-GAMMA-TopRight.md",
     "deliberation/PERSONA-GAMMA-Left.md",
-    "deliberation/PERSONA-GAMMA-BotRight.md",
-    "deliberation/PERSONA-Command-2.md",
-    "deliberation/PERSONA-BETA-TopRight.md",
     "deliberation",
     "DELIBERATION PLAN.md.tmp.2587206.1777006786398",
     "HOME.md.tmp.2587206.1777003520082",

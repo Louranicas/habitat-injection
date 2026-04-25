@@ -661,6 +661,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // writes to real atuin KV — run with `cargo test -- --ignored`
     fn write_kv_returns_bool_without_panic() {
         let ok: bool = write_kv("habitat.m18-test-write-key", "unit-test-value");
         // true or false depending on atuin availability.
@@ -668,6 +669,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // writes to real atuin KV — run with `cargo test -- --ignored`
     fn write_kv_returns_false_without_panicking_on_empty_value() {
         // Writing an empty value — atuin may reject it but must not panic.
         let _ = write_kv("habitat.m18-test-empty-value", "");
@@ -678,6 +680,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[ignore] // writes to real atuin KV key habitat.last-injection — run with `cargo test -- --ignored`
     fn write_injection_cache_returns_result_without_panic() {
         let e = sample_entry();
         let r = write_injection_cache(&e);
@@ -687,6 +690,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // writes to real atuin KV key habitat.last-injection — run with `cargo test -- --ignored`
     fn write_injection_cache_result_key_is_primary_key() {
         let e = sample_entry();
         let r = write_injection_cache(&e);
@@ -694,6 +698,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // writes to real atuin KV key habitat.last-injection — run with `cargo test -- --ignored`
     fn write_injection_cache_elapsed_ms_is_nonzero_or_zero() {
         let e = sample_entry();
         let r = write_injection_cache(&e);
@@ -880,6 +885,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[ignore] // writes to real atuin KV — run with `cargo test -- --ignored`
     fn write_kv_idempotent_without_panic() {
         // Call multiple times — must not panic regardless of atuin state.
         for i in 0u32..3 {
@@ -895,6 +901,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[ignore] // writes "payload 0/1/2" to real atuin KV key habitat.last-injection — pollutes Tier 2 fallback
     fn write_injection_cache_multiple_calls_key_constant() {
         for i in 0u32..3 {
             let e = AtuinCacheEntry {
