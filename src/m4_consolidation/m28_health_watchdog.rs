@@ -288,9 +288,20 @@ mod tests {
             &stop,
         );
 
-        std::thread::sleep(Duration::from_millis(120));
-        stop.store(true, Ordering::Relaxed);
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        loop {
+            let health = read_cached_health(&handle);
+            if health.db_exists {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "watchdog did not complete a cycle within 500ms",
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
 
+        stop.store(true, Ordering::Relaxed);
         let health = read_cached_health(&handle);
         assert!(health.db_exists);
         handle.shutdown();
