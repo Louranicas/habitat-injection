@@ -81,7 +81,7 @@ fn chain_data() -> Vec<(&'static str, &'static str, u32, &'static str)> {
         ("trap", "trap-cp-alias", 1, "cp is aliased to interactive — use /usr/bin/cp -f"),
         ("trap", "trap-pkill-exit-144", 1, "pkill exits 144 — kills && chains"),
         ("trap", "trap-curl-sf-pipe", 1, "curl -sf silences errors when piping — use curl -s"),
-        ("trap", "trap-synthex-health-path", 1, "SYNTHEX health is /api/health NOT /health"),
+        ("trap", "trap-synthex-health-path", 1, "SYNTHEX v2 is port 8092 /health (v1 port 8090 retired)"),
         ("trap", "trap-me-port-8180", 1, "ME V2 is port 8180 NOT 8080"),
         ("trap", "trap-rm-tsv-not-json", 1, "RM is TSV only — NEVER send JSON to :8130"),
         ("trap", "trap-povm-hydrate-broken", 1, "POVM /hydrate broken — use /pathways"),

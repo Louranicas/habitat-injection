@@ -75,7 +75,22 @@ fn parse_session_arg(args: &[String]) -> Result<u32, Box<dyn std::error::Error>>
                 .map_err(|e| format!("invalid session number: {e}").into());
         }
     }
-    Err("usage: habitat-consolidate --session NUM [--fired-patterns P1,P2,...]".into())
+
+    if args.iter().any(|a| a == "--session-from-db") {
+        let config = habitat_injection::m1_foundation::m03_config::Config::load(None);
+        let conn =
+            habitat_injection::m2_schema::m06_schema::open_database(&config.database.path)?;
+        let max_id: u32 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(session_id), 0) FROM session_trajectory",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| format!("session-from-db query: {e}"))?;
+        return Ok(max_id.saturating_add(1));
+    }
+
+    Err("usage: habitat-consolidate --session NUM | --session-from-db [--fired-patterns P1,P2,...]".into())
 }
 
 #[cfg(feature = "sqlite")]
@@ -111,7 +126,7 @@ fn fetch_health_snapshot() -> habitat_injection::m4_consolidation::m15b_trajecto
 
 #[cfg(feature = "sqlite")]
 fn fetch_thermal() -> f64 {
-    let json = run_curl(&["http://localhost:8090/v3/thermal"]);
+    let json = run_curl(&["http://localhost:8092/v3/thermal"]);
     let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
     v.get("temperature").and_then(serde_json::Value::as_f64).unwrap_or(0.0)
 }
@@ -131,12 +146,9 @@ fn run_curl(args: &[&str]) -> String {
 
 #[cfg(feature = "sqlite")]
 fn count_healthy_services() -> u32 {
-    let ports: [u16; 10] = [8082, 8083, 8111, 8120, 8125, 8130, 8132, 8133, 8180, 10002];
+    let ports: [u16; 12] = [8082, 8083, 8092, 8111, 8120, 8125, 8130, 8132, 8133, 8140, 8180, 10002];
     #[allow(clippy::cast_possible_truncation)]
-    let mut count = ports.iter().filter(|p| probe_health(**p, "/health")).count() as u32;
-    if probe_health(8090, "/api/health") {
-        count += 1;
-    }
+    let count = ports.iter().filter(|p| probe_health(**p, "/health")).count() as u32;
     count
 }
 
@@ -146,6 +158,5 @@ fn probe_health(port: u16, path: &str) -> bool {
     std::process::Command::new("curl")
         .args(["-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", "1", &url])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")
-        .unwrap_or(false)
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")
 }

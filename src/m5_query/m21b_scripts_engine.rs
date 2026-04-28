@@ -575,8 +575,7 @@ mod inner {
         use std::time::SystemTime;
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let path =
             std::env::temp_dir().join(format!("habitat_script_{ts}_{}.sh", std::process::id()));
         let file = std::fs::OpenOptions::new()

@@ -105,18 +105,38 @@ pub fn execute_fallback_chain(
 ) -> FallbackResult {
     let start = Instant::now();
 
-    // Tier 1: SQLite cache (feature-gated on `sqlite`)
+    // Tier 1a + 1b: SQLite (feature-gated on `sqlite`)
     #[cfg(feature = "sqlite")]
     {
-        let tier1 = db_path
-            .and_then(open_conn_silent)
-            .and_then(|conn| try_sqlite_cache(&conn, cache_max_age_secs));
-        if let Some(payload) = tier1 {
+        let conn = db_path.and_then(open_conn_silent);
+
+        // Tier 1a: pre-computed cache row (fastest path)
+        if let Some(payload) = conn.as_ref().and_then(|c| try_sqlite_cache(c, cache_max_age_secs))
+        {
             let elapsed_ms = elapsed_ms_saturating(start);
-            debug!(tier = "sqlite-cache", elapsed_ms, "fallback tier 1 hit");
+            debug!(tier = "sqlite-cache", elapsed_ms, "fallback tier 1a hit");
             return FallbackResult {
                 payload,
                 tier: FallbackTier::SqliteCache,
+                elapsed_ms,
+            };
+        }
+
+        // Tier 1b: cache stale/missing but DB accessible — rebuild from tables
+        if let Some(Ok(result)) = conn
+            .as_ref()
+            .map(crate::m3_injection::m13b_cache_light::rebuild_cache_light)
+        {
+            let elapsed_ms = elapsed_ms_saturating(start);
+            debug!(
+                tier = "sqlite-fresh",
+                elapsed_ms,
+                tokens = result.token_count,
+                "fallback tier 1b hit — cache rebuilt from DB"
+            );
+            return FallbackResult {
+                payload: result.payload,
+                tier: FallbackTier::SqliteFresh,
                 elapsed_ms,
             };
         }
@@ -745,8 +765,9 @@ mod tests {
         }
 
         #[test]
-        fn execute_fallback_chain_with_stale_cache_skips_to_tier2_or_3() {
+        fn execute_fallback_chain_with_stale_cache_hits_tier_1b() {
             let tmp = tempfile_path("m13_chain_stale");
+            let _ = std::fs::remove_file(&tmp);
             {
                 let conn = crate::m2_schema::m06_schema::open_database(&tmp).unwrap();
                 let ts = now_secs().saturating_sub(10_000);
@@ -758,11 +779,12 @@ mod tests {
                 )
                 .unwrap();
             }
-            // max_age = 300 → stale
+            // max_age = 300 → stale → Tier 1b rebuilds from DB tables
             let result = execute_fallback_chain(Some(&tmp), 300);
-            assert!(
-                result.tier == FallbackTier::AtuinKv || result.tier == FallbackTier::Static,
-                "expected tier 2 or 3, got {:?}",
+            assert_eq!(
+                result.tier,
+                FallbackTier::SqliteFresh,
+                "stale cache should trigger Tier 1b rebuild, got {:?}",
                 result.tier
             );
             assert!(!result.payload.is_empty());
@@ -770,17 +792,18 @@ mod tests {
         }
 
         #[test]
-        fn execute_fallback_chain_empty_db_falls_through() {
+        fn execute_fallback_chain_empty_db_hits_tier_1b() {
             let tmp = tempfile_path("m13_chain_empty");
+            let _ = std::fs::remove_file(&tmp);
             {
                 let _conn = crate::m2_schema::m06_schema::open_database(&tmp).unwrap();
-                // No rows inserted
+                // No rows inserted — Tier 1b rebuilds from empty tables
             }
             let result = execute_fallback_chain(Some(&tmp), 300);
-            // Should land on tier 2 (atuin) or tier 3 (static)
-            assert!(
-                result.tier == FallbackTier::AtuinKv || result.tier == FallbackTier::Static,
-                "expected tier 2 or 3, got {:?}",
+            assert_eq!(
+                result.tier,
+                FallbackTier::SqliteFresh,
+                "empty DB should trigger Tier 1b rebuild, got {:?}",
                 result.tier
             );
             let _ = std::fs::remove_file(&tmp);

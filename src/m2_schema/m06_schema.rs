@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::m1_foundation::m02_errors::SchemaError;
 
 #[cfg(feature = "sqlite")]
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 
 /// Open (or create) the injection database and ensure schema is current.
 ///
@@ -73,7 +73,8 @@ fn configure_connection(conn: &Connection) -> Result<(), SchemaError> {
         "PRAGMA journal_mode = WAL;
          PRAGMA busy_timeout = 5000;
          PRAGMA foreign_keys = ON;
-         PRAGMA synchronous = NORMAL;",
+         PRAGMA synchronous = NORMAL;
+         PRAGMA wal_autocheckpoint = 100;",
     )
     .map_err(|e| SchemaError::Sqlite(e.to_string()))
 }
@@ -92,6 +93,7 @@ pub fn create_all_tables(conn: &Connection) -> Result<(), SchemaError> {
     create_injection_cache(conn)?;
     create_session_checkpoint(conn)?;
     create_injection_script(conn)?;
+    create_daemon_state(conn)?;
     Ok(())
 }
 
@@ -287,6 +289,21 @@ fn create_injection_script(conn: &Connection) -> Result<(), SchemaError> {
 }
 
 #[cfg(feature = "sqlite")]
+fn create_daemon_state(conn: &Connection) -> Result<(), SchemaError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS daemon_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL,
+            updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+        );",
+    )
+    .map_err(|e| SchemaError::TableCreationFailed {
+        table: "daemon_state".into(),
+        reason: e.to_string(),
+    })
+}
+
+#[cfg(feature = "sqlite")]
 fn get_schema_version(conn: &Connection) -> Result<u32, SchemaError> {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
@@ -312,6 +329,9 @@ fn migrate(conn: &Connection, from: u32, to: u32) -> Result<(), SchemaError> {
             }
             2 => {
                 create_injection_script(conn)?;
+            }
+            3 => {
+                create_daemon_state(conn)?;
             }
             _ => {
                 return Err(SchemaError::MigrationFailed {
@@ -441,12 +461,13 @@ mod tests {
         assert!(tables.contains(&"injection_cache".to_string()));
         assert!(tables.contains(&"session_checkpoint".to_string()));
         assert!(tables.contains(&"injection_script".to_string()));
+        assert!(tables.contains(&"daemon_state".to_string()));
     }
 
     #[test]
-    fn table_count_is_seven() {
+    fn table_count_is_eight() {
         let conn = mem_db();
-        assert_eq!(list_tables(&conn).unwrap().len(), 7);
+        assert_eq!(list_tables(&conn).unwrap().len(), 8);
     }
 
     #[test]
@@ -454,7 +475,7 @@ mod tests {
         let conn = mem_db();
         create_all_tables(&conn).unwrap();
         create_all_tables(&conn).unwrap();
-        assert_eq!(list_tables(&conn).unwrap().len(), 7);
+        assert_eq!(list_tables(&conn).unwrap().len(), 8);
     }
 
     #[test]
@@ -1041,7 +1062,7 @@ mod tests {
         set_schema_version(&conn, 0).unwrap();
         migrate(&conn, 0, CURRENT_VERSION).unwrap();
         assert_eq!(get_schema_version(&conn).unwrap(), CURRENT_VERSION);
-        assert_eq!(list_tables(&conn).unwrap().len(), 7);
+        assert_eq!(list_tables(&conn).unwrap().len(), 8);
     }
 
     #[test]
@@ -1061,7 +1082,7 @@ mod tests {
 
         let conn = open_database(&path).unwrap();
         assert!(path.exists());
-        assert_eq!(list_tables(&conn).unwrap().len(), 7);
+        assert_eq!(list_tables(&conn).unwrap().len(), 8);
 
         drop(conn);
         let _ = std::fs::remove_file(&path);
@@ -1338,5 +1359,114 @@ fn column_exists_returns_false_for_unknown_column() {
         migrate_v1_to_v2(&conn).unwrap();
         migrate_v1_to_v2(&conn).unwrap();
         assert!(column_exists(&conn, "causal_chain", "created_at").unwrap());
+    }
+
+    #[test]
+    fn daemon_state_insert_and_read() {
+        let conn = mem_db();
+        conn.execute(
+            "INSERT INTO daemon_state (key, value) VALUES ('tool_use_counter', '42')",
+            [],
+        )
+        .unwrap();
+        let val: String = conn
+            .query_row(
+                "SELECT value FROM daemon_state WHERE key = 'tool_use_counter'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(val, "42");
+    }
+
+    #[test]
+    fn daemon_state_key_is_pk() {
+        let conn = mem_db();
+        conn.execute(
+            "INSERT INTO daemon_state (key, value) VALUES ('k1', 'v1')",
+            [],
+        )
+        .unwrap();
+        let result = conn.execute(
+            "INSERT INTO daemon_state (key, value) VALUES ('k1', 'v2')",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn daemon_state_upsert() {
+        let conn = mem_db();
+        conn.execute(
+            "INSERT INTO daemon_state (key, value) VALUES ('k', 'v1')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO daemon_state (key, value, updated_at) VALUES ('k', 'v2', unixepoch())",
+            [],
+        )
+        .unwrap();
+        let val: String = conn
+            .query_row(
+                "SELECT value FROM daemon_state WHERE key = 'k'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(val, "v2");
+    }
+
+    #[test]
+    fn daemon_state_updated_at_has_default() {
+        let conn = mem_db();
+        conn.execute(
+            "INSERT INTO daemon_state (key, value) VALUES ('ts_test', 'val')",
+            [],
+        )
+        .unwrap();
+        let ts: i64 = conn
+            .query_row(
+                "SELECT updated_at FROM daemon_state WHERE key = 'ts_test'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(ts > 0);
+    }
+
+    #[test]
+    fn schema_version_is_four() {
+        let conn = mem_db();
+        assert_eq!(schema_version(&conn).unwrap(), 4);
+    }
+
+    #[test]
+    fn migration_3_to_4_creates_daemon_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        configure_connection(&conn).unwrap();
+        create_causal_chain(&conn).unwrap();
+        create_session_trajectory(&conn).unwrap();
+        create_workstream(&conn).unwrap();
+        create_reinforced_pattern(&conn).unwrap();
+        create_injection_cache(&conn).unwrap();
+        create_session_checkpoint(&conn).unwrap();
+        create_injection_script(&conn).unwrap();
+        set_schema_version(&conn, 3).unwrap();
+
+        migrate(&conn, 3, 4).unwrap();
+
+        let tables = list_tables(&conn).unwrap();
+        assert!(tables.contains(&"daemon_state".to_string()));
+        assert_eq!(schema_version(&conn).unwrap(), 4);
+    }
+
+    #[test]
+    fn wal_autocheckpoint_is_set() {
+        let conn = mem_db();
+        let val: i32 = conn
+            .pragma_query_value(None, "wal_autocheckpoint", |r| r.get(0))
+            .unwrap();
+        assert_eq!(val, 100);
     }
 }

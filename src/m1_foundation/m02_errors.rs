@@ -45,6 +45,9 @@ pub enum HabitatError {
 
     #[error(transparent)]
     Config(#[from] ConfigError),
+
+    #[error(transparent)]
+    SelfHeal(#[from] SelfHealError),
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +133,47 @@ pub enum ConsolidationError {
     /// Auto-resolve found no eligible chains.
     #[error("auto-resolve found no chains inactive for {threshold} sessions")]
     NoStaleChains { threshold: u32 },
+}
+
+// ---------------------------------------------------------------------------
+// SelfHealError
+// ---------------------------------------------------------------------------
+
+/// Errors during self-healing operations (L4 m25/m26/m28).
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SelfHealError {
+    /// Backup creation failed (online backup API error).
+    #[error("backup creation failed: {0}")]
+    BackupCreationFailed(String),
+
+    /// Backup integrity verification failed after creation.
+    #[error("backup verification failed: integrity={0}")]
+    BackupVerificationFailed(String),
+
+    /// Atomic file swap (rename or copy+remove) failed.
+    #[error("atomic swap failed: {0}")]
+    AtomicSwapFailed(String),
+
+    /// `SQLite` integrity check reported corruption.
+    #[error("integrity check failed: {0}")]
+    IntegrityCheckFailed(String),
+
+    /// Cache rebuild from database tables failed.
+    #[error("cache rebuild failed: {0}")]
+    RebuildFailed(String),
+
+    /// Schema migration on a recovered database failed.
+    #[error("schema migration required but failed: {0}")]
+    SchemaMigrationFailed(String),
+
+    /// Underlying consolidation error during self-heal rebuild.
+    #[error(transparent)]
+    Consolidation(#[from] ConsolidationError),
+
+    /// Underlying schema error during self-heal database operations.
+    #[error(transparent)]
+    Schema(#[from] SchemaError),
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +345,7 @@ pub enum ErrorKind {
     Query,
     Migration,
     Config,
+    SelfHeal,
 }
 
 impl fmt::Display for ErrorKind {
@@ -312,6 +357,7 @@ impl fmt::Display for ErrorKind {
             Self::Query => f.write_str("query"),
             Self::Migration => f.write_str("migration"),
             Self::Config => f.write_str("config"),
+            Self::SelfHeal => f.write_str("self-heal"),
         }
     }
 }
@@ -327,6 +373,7 @@ impl HabitatError {
             Self::Query(_) => ErrorKind::Query,
             Self::Migration(_) => ErrorKind::Migration,
             Self::Config(_) => ErrorKind::Config,
+            Self::SelfHeal(_) => ErrorKind::SelfHeal,
         }
     }
 }
@@ -377,6 +424,13 @@ mod tests {
         };
         let habitat: HabitatError = err.into();
         assert_eq!(habitat.kind(), ErrorKind::Migration);
+    }
+
+    #[test]
+    fn habitat_error_from_self_heal() {
+        let err = SelfHealError::RebuildFailed("stale cache".into());
+        let habitat: HabitatError = err.into();
+        assert_eq!(habitat.kind(), ErrorKind::SelfHeal);
     }
 
     #[test]
@@ -528,6 +582,74 @@ mod tests {
     fn consolidation_no_stale_chains_display() {
         let err = ConsolidationError::NoStaleChains { threshold: 10 };
         assert!(err.to_string().contains("10"));
+    }
+
+    // -- SelfHealError --
+
+    #[test]
+    fn self_heal_backup_creation_display() {
+        let err = SelfHealError::BackupCreationFailed("disk full".into());
+        assert!(err.to_string().contains("disk full"));
+    }
+
+    #[test]
+    fn self_heal_backup_verification_display() {
+        let err = SelfHealError::BackupVerificationFailed("page checksum mismatch".into());
+        let msg = err.to_string();
+        assert!(msg.contains("page checksum mismatch"));
+        assert!(msg.contains("integrity"));
+    }
+
+    #[test]
+    fn self_heal_atomic_swap_display() {
+        let err = SelfHealError::AtomicSwapFailed("permission denied".into());
+        assert!(err.to_string().contains("permission denied"));
+    }
+
+    #[test]
+    fn self_heal_integrity_check_display() {
+        let err = SelfHealError::IntegrityCheckFailed("malformed page 42".into());
+        assert!(err.to_string().contains("malformed page 42"));
+    }
+
+    #[test]
+    fn self_heal_rebuild_display() {
+        let err = SelfHealError::RebuildFailed("table missing".into());
+        assert!(err.to_string().contains("table missing"));
+    }
+
+    #[test]
+    fn self_heal_schema_migration_display() {
+        let err = SelfHealError::SchemaMigrationFailed("version 4 SQL error".into());
+        assert!(err.to_string().contains("version 4"));
+    }
+
+    #[test]
+    fn self_heal_from_consolidation() {
+        let inner = ConsolidationError::CacheRebuildFailed("tx aborted".into());
+        let outer: SelfHealError = inner.into();
+        assert!(outer.to_string().contains("tx aborted"));
+    }
+
+    #[test]
+    fn self_heal_from_schema() {
+        let inner = SchemaError::Sqlite("database is locked".into());
+        let outer: SelfHealError = inner.into();
+        assert!(outer.to_string().contains("database is locked"));
+    }
+
+    #[test]
+    fn self_heal_empty_message() {
+        let err = SelfHealError::BackupCreationFailed(String::new());
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn self_heal_debug_contains_variant() {
+        let err = SelfHealError::AtomicSwapFailed("EXDEV".into());
+        let dbg = format!("{err:?}");
+        assert!(dbg.contains("AtomicSwapFailed"));
+        assert!(dbg.contains("EXDEV"));
     }
 
     // -- SchemaError --
@@ -745,6 +867,7 @@ mod tests {
         assert_eq!(ErrorKind::Query.to_string(), "query");
         assert_eq!(ErrorKind::Migration.to_string(), "migration");
         assert_eq!(ErrorKind::Config.to_string(), "config");
+        assert_eq!(ErrorKind::SelfHeal.to_string(), "self-heal");
     }
 
     // -- format_error_chain --
@@ -826,11 +949,25 @@ mod tests {
         assert_sync::<ConfigError>();
     }
 
+    #[test]
+    fn self_heal_error_is_send_sync() {
+        assert_send::<SelfHealError>();
+        assert_sync::<SelfHealError>();
+    }
+
     // -- Error transparency --
 
     #[test]
     fn habitat_error_transparent_display_matches_inner() {
         let inner = InjectionError::QueryFailed("inner query".into());
+        let inner_msg = inner.to_string();
+        let outer: HabitatError = inner.into();
+        assert_eq!(outer.to_string(), inner_msg);
+    }
+
+    #[test]
+    fn habitat_error_transparent_self_heal_display() {
+        let inner = SelfHealError::IntegrityCheckFailed("corrupt page".into());
         let inner_msg = inner.to_string();
         let outer: HabitatError = inner.into();
         assert_eq!(outer.to_string(), inner_msg);
@@ -858,7 +995,9 @@ mod tests {
         let mut set = HashSet::new();
         set.insert(ErrorKind::Schema);
         set.insert(ErrorKind::Schema);
-        assert_eq!(set.len(), 1);
+        set.insert(ErrorKind::SelfHeal);
+        set.insert(ErrorKind::SelfHeal);
+        assert_eq!(set.len(), 2);
     }
 
     #[test]
@@ -973,11 +1112,12 @@ mod tests {
             QueryError::ExecutionFailed("t".into()).into(),
             MigrationError::DualWriteTransitionFailed("t".into()).into(),
             ConfigError::MissingField { field: "t".into() }.into(),
+            SelfHealError::RebuildFailed("t".into()).into(),
         ];
         let kinds: Vec<ErrorKind> = variants.iter().map(HabitatError::kind).collect();
-        assert_eq!(kinds.len(), 6);
+        assert_eq!(kinds.len(), 7);
         let unique: std::collections::HashSet<ErrorKind> = kinds.into_iter().collect();
-        assert_eq!(unique.len(), 6);
+        assert_eq!(unique.len(), 7);
     }
 
     // -- Debug formatting --

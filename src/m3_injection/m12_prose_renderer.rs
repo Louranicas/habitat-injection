@@ -362,7 +362,7 @@ pub fn render_chains(entries: &[ChainEntry], limit: usize) -> String {
 
     // Sort descending by reinforcement_count; work on a local copy to avoid mutating caller data
     let mut sorted: Vec<&ChainEntry> = entries.iter().collect();
-    sorted.sort_by(|a, b| b.reinforcement_count.cmp(&a.reinforcement_count));
+    sorted.sort_by_key(|e| std::cmp::Reverse(e.reinforcement_count));
 
     let capped = sorted.len().min(limit);
     let mut out = String::from("### Unresolved Chains (by frequency)\n");

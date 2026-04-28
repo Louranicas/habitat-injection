@@ -65,7 +65,7 @@ pub struct IngesterConfig {
     pub orac_poll_secs: u64,
     /// `PaneVortex` base URL, e.g. `"http://localhost:8132"`.
     pub pv2_url: String,
-    /// SYNTHEX base URL, e.g. `"http://localhost:8090"`.
+    /// SYNTHEX base URL, e.g. `"http://localhost:8092"`.
     pub synthex_url: String,
     /// How often (seconds) to poll SYNTHEX for new events.
     pub synthex_poll_secs: u64,
@@ -85,7 +85,7 @@ impl Default for IngesterConfig {
             orac_url: String::from("http://localhost:8133"),
             orac_poll_secs: ORAC_POLL_INTERVAL_SECS,
             pv2_url: String::from("http://localhost:8132"),
-            synthex_url: String::from("http://localhost:8090"),
+            synthex_url: String::from("http://localhost:8092"),
             synthex_poll_secs: SYNTHEX_POLL_INTERVAL_SECS,
             povm_url: String::from("http://localhost:8125"),
             povm_sync_secs: POVM_SYNC_INTERVAL_SECS,

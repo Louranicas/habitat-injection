@@ -101,6 +101,25 @@ pub const COMPACTION_INTERVAL_SECS: u64 = 24 * 60 * 60;
 /// Maximum injection latency target in milliseconds.
 pub const MAX_INJECTION_LATENCY_MS: u64 = 100;
 
+/// Watchdog health-check interval in seconds (5 minutes).
+pub const WATCHDOG_CHECK_INTERVAL_SECS: u64 = 300;
+
+/// Auto-consolidation timer interval in seconds (6 hours).
+/// Cache-rebuild only — no Hebbian decay (that runs exclusively in `habitat-consolidate`).
+pub const AUTO_CONSOLIDATE_INTERVAL_SECS: u64 = 21_600;
+
+/// `PostToolUse` counter threshold — rebuild cache every Nth tool use.
+pub const POST_TOOL_USE_REBUILD_THRESHOLD: u32 = 50;
+
+/// Maximum age of backup clone before forced refresh (6 hours).
+pub const BACKUP_MAX_AGE_SECS: u64 = 21_600;
+
+/// Minimum interval between consecutive watchdog heal actions (60 seconds).
+pub const WATCHDOG_HEAL_COOLDOWN_SECS: u64 = 60;
+
+/// WAL auto-checkpoint threshold (pages).
+pub const WAL_AUTOCHECKPOINT_PAGES: u32 = 100;
+
 /// POVM consolidation interval in ticks (for POVM-origin edges in STDB).
 pub const POVM_CONSOLIDATION_TICKS: u64 = 300;
 
@@ -363,7 +382,7 @@ mod tests {
 
     #[test]
     fn stdb_port_not_in_habitat_range() {
-        let habitat_ports = [8082, 8083, 8090, 8111, 8120, 8125, 8130, 8132, 8133, 8180, 10002];
+        let habitat_ports = [8082, 8083, 8092, 8111, 8120, 8125, 8130, 8132, 8133, 8140, 8180, 10002];
         assert!(
             !habitat_ports.contains(&STDB_PORT),
             "STDB port conflicts with existing habitat service"
@@ -372,7 +391,7 @@ mod tests {
 
     #[test]
     fn ingester_port_not_in_habitat_range() {
-        let habitat_ports = [8082, 8083, 8090, 8111, 8120, 8125, 8130, 8132, 8133, 8180, 10002];
+        let habitat_ports = [8082, 8083, 8092, 8111, 8120, 8125, 8130, 8132, 8133, 8140, 8180, 10002];
         assert!(
             !habitat_ports.contains(&INGESTER_HEALTH_PORT),
             "ingester port conflicts with existing habitat service"
@@ -444,6 +463,45 @@ mod tests {
         assert!(MAX_PATTERNS_INJECTED > 0);
     }
 
+    // -- Self-manage constants --
+
+    #[test]
+    fn watchdog_check_interval_five_minutes() {
+        assert_eq!(WATCHDOG_CHECK_INTERVAL_SECS, 300);
+    }
+
+    #[test]
+    fn auto_consolidate_interval_six_hours() {
+        assert_eq!(AUTO_CONSOLIDATE_INTERVAL_SECS, 21_600);
+    }
+
+    #[test]
+    fn post_tool_use_threshold_positive() {
+        assert!(POST_TOOL_USE_REBUILD_THRESHOLD > 0);
+        assert!(POST_TOOL_USE_REBUILD_THRESHOLD <= 200);
+    }
+
+    #[test]
+    fn backup_max_age_matches_consolidate() {
+        assert_eq!(BACKUP_MAX_AGE_SECS, AUTO_CONSOLIDATE_INTERVAL_SECS);
+    }
+
+    #[test]
+    fn watchdog_cooldown_shorter_than_check_interval() {
+        assert!(WATCHDOG_HEAL_COOLDOWN_SECS < WATCHDOG_CHECK_INTERVAL_SECS);
+    }
+
+    #[test]
+    fn wal_autocheckpoint_reasonable() {
+        assert!(WAL_AUTOCHECKPOINT_PAGES >= 10);
+        assert!(WAL_AUTOCHECKPOINT_PAGES <= 10_000);
+    }
+
+    #[test]
+    fn watchdog_interval_shorter_than_consolidate() {
+        assert!(WATCHDOG_CHECK_INTERVAL_SECS < AUTO_CONSOLIDATE_INTERVAL_SECS);
+    }
+
     #[test]
     fn all_intervals_are_nonzero() {
         assert!(CACHE_REBUILD_SECS > 0);
@@ -453,6 +511,10 @@ mod tests {
         assert!(SYNTHEX_POLL_INTERVAL_SECS > 0);
         assert!(POVM_SYNC_INTERVAL_SECS > 0);
         assert!(GRADIENT_CAPTURE_INTERVAL_SECS > 0);
+        assert!(WATCHDOG_CHECK_INTERVAL_SECS > 0);
+        assert!(AUTO_CONSOLIDATE_INTERVAL_SECS > 0);
+        assert!(WATCHDOG_HEAL_COOLDOWN_SECS > 0);
+        assert!(BACKUP_MAX_AGE_SECS > 0);
     }
 
     #[test]

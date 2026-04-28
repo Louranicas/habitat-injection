@@ -610,7 +610,7 @@ mod tests {
         cp.git_last_commit = Some("feat: implement m10b checkpoint CRUD".into());
         cp.services_total = Some(12);
         cp.services_alive_ports =
-            Some("8080,8081,8090,8105,8110,8120,8125,8130,8132,8133,9001,10001".into());
+            Some("8082,8083,8092,8111,8120,8125,8130,8132,8133,8140,8180,10002".into());
         cp.watcher_ready = Some(true);
         cp.watcher_reason = None;
         cp.persona = Some("The Watcher".into());
