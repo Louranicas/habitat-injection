@@ -25,8 +25,8 @@ use crate::m1_foundation::m01_types::{Severity, TokenBudget};
 pub const DEFAULT_BUDGET: TokenBudget = TokenBudget::new(1100);
 
 /// Hebbian decay factor applied to unfired pattern weights each cycle.
-/// `weight *= DECAY_RATE` → 0.95 means ~5% decay per cycle.
-pub const DECAY_RATE: f64 = 0.95;
+/// `weight *= DECAY_RATE` → 0.98 means ~2% decay per cycle (half-life ~35 sessions).
+pub const DECAY_RATE: f64 = 0.98;
 
 /// Reinforcement rate for fired patterns.
 /// `weight += REINFORCE_RATE * (1.0 - weight)` → asymptotic approach to 1.0.

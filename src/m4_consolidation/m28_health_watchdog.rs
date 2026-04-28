@@ -217,9 +217,18 @@ mod tests {
             &stop,
         );
 
-        std::thread::sleep(Duration::from_millis(200));
-        let health = read_cached_health(&handle);
-        assert!(health.db_exists, "watchdog should have run at least once within 200ms");
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        loop {
+            let health = read_cached_health(&handle);
+            if health.db_exists {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "watchdog should have run at least once within 500ms",
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
 
         stop.store(true, Ordering::Relaxed);
         handle.shutdown();

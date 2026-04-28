@@ -105,7 +105,7 @@ pub fn run_consolidation(
 
 /// Apply Hebbian decay to all patterns that have been fired at least once.
 ///
-/// Calls [`decay_all`] with the [`DECAY_RATE`] constant (`weight *= 0.95`).
+/// Calls [`decay_all`] with the [`DECAY_RATE`] constant (`weight *= 0.98`).
 /// Only patterns where `last_fired_session IS NOT NULL` are affected; patterns
 /// that have never been fired are left unchanged.
 ///
@@ -798,7 +798,7 @@ mod tests {
 
         #[test]
         fn decay_rate_constant_matches_expected_value() {
-            assert!((DECAY_RATE - 0.95).abs() < f64::EPSILON);
+            assert!((DECAY_RATE - 0.98).abs() < f64::EPSILON);
         }
 
         #[test]
@@ -821,15 +821,14 @@ mod tests {
             seed_fired(&conn, "converge");
             // After enough decay-only cycles the weight should drop below the
             // prune threshold and the pattern will be pruned.
-            for s in 110..200_u32 {
+            for s in 110..350_u32 {
                 let r = run_consolidation(&conn, s, &[]).expect("run");
                 if r.patterns_pruned > 0 {
-                    // Once pruned, get_by_id returns None.
                     assert!(get_by_id(&conn, "converge").expect("g").is_none());
                     return;
                 }
             }
-            panic!("pattern never pruned after 90 decay-only cycles");
+            panic!("pattern never pruned after 240 decay-only cycles");
         }
 
         #[test]
