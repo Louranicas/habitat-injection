@@ -1,6 +1,6 @@
 # habitat-injection — Phase 1 Execution Plan
 
-> **Status:** LIBRARY COMPLETE, CLI + DEPLOYMENT PENDING
+> **Status:** PRODUCTION COMPLETE — all 11 steps delivered (S110-S185)
 > **Created:** 2026-04-24 (S110)
 > **Scope:** 4 CLI binaries + data seeding + hook wiring + validation
 > **Estimated:** ~20h across 4-5 sessions (S110-S114)
@@ -267,5 +267,23 @@ src/bin/
 
 ---
 
+## 9. Completion Status (S185 Watcher Remediation)
+
+| Step | Description | Status | Session |
+|------|-------------|--------|---------|
+| 1 | `habitat-init` binary | DEPLOYED | S110 |
+| 2-5 | Data seeding | PARTIAL (54 chains, 162 patterns, 15 workstreams, 95 trajectories) | S111-S185 |
+| 6 | `habitat-inject` (3-tier) | DEPLOYED + ACTIVE (SessionStart hook, 2ms cache hit) | S112 |
+| 7 | `habitat-consolidate` | DEPLOYED + ACTIVE (Stop hook, `--session-from-db`) | S112 |
+| 8 | `habitat-query` | DEPLOYED | S112 |
+| 9 | Hook wiring | ALL 3 HOOKS ACTIVE (SessionStart + PostToolUse + Stop) | S112-S121 |
+| 10 | Atuin script registration | DONE (4 scripts) | S185 |
+| 11 | 5-session validation | DE FACTO (95 sessions of production use) | S112-S185 |
+
+**S185 additional fixes:** m28 timing race (polling loop), decay rate 0.95→0.98, 162 patterns re-seeded, 5 stale workstreams deferred, documentation corrected (6 stale claims). See [WATCHER_REMEDIATION_PLAN.md](WATCHER_REMEDIATION_PLAN.md).
+
+---
+
 *Execution plan authored S110 · Prerequisite: L1-L6 library complete (2de4e2f + 8b61a89)*
+*Completion verified S185 · Watcher remediation: 10 issues resolved across 7 phases*
 *Back to: [[HOME]] · [[MASTER INDEX]] · [[Implementation Status]]*

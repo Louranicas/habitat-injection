@@ -5,6 +5,24 @@
 > **Scope:** What remains to bring memory-injection from current state to production-complete
 > **Back to:** [EXECUTION_PLAN](EXECUTION_PLAN.md) · [CLAUDE.md](CLAUDE.md) · [PLAN.md](PLAN.md)
 
+## S185 Corrections (2026-04-29)
+
+The following findings from this S147 assessment were verified as stale by live probing during S185 Watcher remediation. See [WATCHER_REMEDIATION_PLAN.md](WATCHER_REMEDIATION_PLAN.md) for full details.
+
+| Original claim | Corrected state | Evidence |
+|---|---|---|
+| §2 BUG-2: "23 uncommitted files" | Committed in S185 (`1f92d8a`) | `git log` |
+| §3 GAP-2: "Stop Hook Not Wired" | Was wired before S147 (position 3/3, `--session-from-db`, timeout 10s) | `rg habitat-consolidate ~/.claude/settings.json` |
+| §5.3: "54 chains, 5 unresolved" | 54 chains, 0 unresolved (all auto-resolved) | `SELECT ... WHERE resolved_session IS NULL` → empty |
+| §5.3: "50 trajectory rows" | 95 rows (sessions 99-194) | `SELECT COUNT(*) FROM session_trajectory` |
+| §5.3: "39 reinforced patterns" | **0 patterns** — all pruned by Hebbian decay (reinforcement structurally disconnected) | `SELECT COUNT(*) FROM reinforced_pattern` → 0 (before S185 re-seeding) |
+| §3 BUG-1: m28 watchdog timing | FIXED — polling loop replaces sleep+assert (`b0f9432`) | 3/3 consecutive passes |
+
+**Additional S185 findings not in original assessment:**
+- Decay rate 0.95 caused pattern extinction (S-02) — adjusted to 0.98
+- All 5 active workstreams stale (96-105 sessions untouched, S-01) — deferred
+- Injection payload was self-referentially stale (replaying S121 context for 65+ sessions)
+
 ---
 
 ## 1. Current State Summary
