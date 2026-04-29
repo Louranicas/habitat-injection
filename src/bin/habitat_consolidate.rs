@@ -218,24 +218,28 @@ fn fetch_pv2_field() -> f64 {
 
 #[cfg(feature = "sqlite")]
 fn fetch_thermal() -> f64 {
-    for url in &[
-        "http://localhost:8092/health",
-        "http://localhost:8090/api/health",
-    ] {
-        let json = run_curl(&[url]);
-        let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
-        if let Some(t) = v.get("temperature").and_then(serde_json::Value::as_f64)
-            && t > 0.0
-        {
-            return t;
-        }
+    // S155 Track B3c — single-probe v2 thermal failover (R-C2).
+    // v1 (:8090) permanently retired at S113; v2 daemon exposes
+    // /v3/thermal at :8092 with the canonical {temperature} field.
+    // 500 ms timeout matches the atuin-script siblings (B1+B2).
+    let json = run_curl_with_timeout(&["http://localhost:8092/v3/thermal"], "0.5");
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+    if let Some(t) = v.get("temperature").and_then(serde_json::Value::as_f64)
+        && t > 0.0
+    {
+        return t;
     }
     0.0
 }
 
 #[cfg(feature = "sqlite")]
 fn run_curl(args: &[&str]) -> String {
-    let mut cmd_args = vec!["-s", "-m", "2"];
+    run_curl_with_timeout(args, "2")
+}
+
+#[cfg(feature = "sqlite")]
+fn run_curl_with_timeout(args: &[&str], timeout_secs: &str) -> String {
+    let mut cmd_args = vec!["-s", "-m", timeout_secs];
     cmd_args.extend_from_slice(args);
     std::process::Command::new("curl")
         .args(&cmd_args)
