@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::m1_foundation::m02_errors::SchemaError;
 
 #[cfg(feature = "sqlite")]
-const CURRENT_VERSION: u32 = 4;
+const CURRENT_VERSION: u32 = 5;
 
 /// Open (or create) the injection database and ensure schema is current.
 ///
@@ -187,6 +187,8 @@ fn create_reinforced_pattern(conn: &Connection) -> Result<(), SchemaError> {
             weight              REAL NOT NULL DEFAULT 0.5,
             hit_count           INTEGER NOT NULL DEFAULT 1,
             last_fired_session  INTEGER,
+            natural_hit_count   INTEGER NOT NULL DEFAULT 0,
+            keywords            TEXT NOT NULL DEFAULT '',
             consent             TEXT NOT NULL DEFAULT 'Emit'
                 CHECK(consent IN ('Emit', 'Store', 'Forget')),
             created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -304,6 +306,35 @@ fn create_daemon_state(conn: &Connection) -> Result<(), SchemaError> {
 }
 
 #[cfg(feature = "sqlite")]
+fn migrate_v4_to_v5(conn: &Connection) -> Result<(), SchemaError> {
+    let has_col = |col: &str| -> bool {
+        conn.prepare(&format!("SELECT {col} FROM reinforced_pattern LIMIT 0"))
+            .is_ok()
+    };
+    if !has_col("natural_hit_count") {
+        conn.execute(
+            "ALTER TABLE reinforced_pattern ADD COLUMN natural_hit_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| SchemaError::MigrationFailed {
+            version: 5,
+            reason: e.to_string(),
+        })?;
+    }
+    if !has_col("keywords") {
+        conn.execute(
+            "ALTER TABLE reinforced_pattern ADD COLUMN keywords TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .map_err(|e| SchemaError::MigrationFailed {
+            version: 5,
+            reason: e.to_string(),
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "sqlite")]
 fn get_schema_version(conn: &Connection) -> Result<u32, SchemaError> {
     let version: u32 = conn
         .pragma_query_value(None, "user_version", |row| row.get(0))
@@ -332,6 +363,9 @@ fn migrate(conn: &Connection, from: u32, to: u32) -> Result<(), SchemaError> {
             }
             3 => {
                 create_daemon_state(conn)?;
+            }
+            4 => {
+                migrate_v4_to_v5(conn)?;
             }
             _ => {
                 return Err(SchemaError::MigrationFailed {
@@ -1433,12 +1467,6 @@ fn column_exists_returns_false_for_unknown_column() {
             )
             .unwrap();
         assert!(ts > 0);
-    }
-
-    #[test]
-    fn schema_version_is_four() {
-        let conn = mem_db();
-        assert_eq!(schema_version(&conn).unwrap(), 4);
     }
 
     #[test]

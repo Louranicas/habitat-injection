@@ -973,13 +973,13 @@ mod tests {
 
     #[cfg(feature = "sqlite")]
     #[test]
-    fn rebuild_cache_result_sections_rendered_at_most_five() {
+    fn rebuild_cache_result_sections_rendered_at_most_six() {
         let conn = open_memory().unwrap();
         seed_db(&conn);
         let result = rebuild_cache(&conn, 109, 12, 12, Some(0.244)).unwrap();
         assert!(
-            result.sections_rendered <= 5,
-            "at most 5 prose sections can be rendered; got {}",
+            result.sections_rendered <= 6,
+            "at most 6 prose sections can be rendered; got {}",
             result.sections_rendered
         );
     }

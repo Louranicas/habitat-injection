@@ -29,11 +29,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "sqlite")]
 use crate::m1_foundation::m02_errors::ConsolidationError;
 #[cfg(feature = "sqlite")]
-use crate::m1_foundation::m05_constants::{AUTO_RESOLVE_SESSIONS, DECAY_RATE, PRUNE_THRESHOLD};
+use crate::m1_foundation::m05_constants::{
+    AUTO_RESOLVE_PLAN_SESSIONS, AUTO_RESOLVE_SESSIONS, BUOY_RATE, BUOY_THRESHOLD, BUOY_TTL_SESSIONS,
+    DECAY_RATE, PRUNE_THRESHOLD,
+};
 #[cfg(feature = "sqlite")]
-use crate::m2_schema::m07_causal_chain::auto_resolve_stale;
+use crate::m2_schema::m07_causal_chain::auto_resolve_stale_typed;
 #[cfg(feature = "sqlite")]
-use crate::m2_schema::m10_pattern::{decay_all, prune_weak, reinforce};
+use crate::m2_schema::m10_pattern::{buoy_qualified, decay_all, natural_reinforce_weighted, prune_weak};
 
 // ---------------------------------------------------------------------------
 // ConsolidationResult
@@ -48,6 +51,8 @@ use crate::m2_schema::m10_pattern::{decay_all, prune_weak, reinforce};
 pub struct ConsolidationResult {
     /// Number of [`reinforced_pattern`] rows whose `weight` was decayed.
     pub patterns_decayed: u32,
+    /// Number of qualified pathways that received a buoy maintenance pulse.
+    pub patterns_buoyed: u32,
     /// Number of named fired patterns that were actually found and reinforced.
     pub patterns_reinforced: u32,
     /// Number of [`reinforced_pattern`] rows deleted by the prune step.
@@ -83,12 +88,30 @@ pub fn run_consolidation(
     session: u32,
     fired_patterns: &[&str],
 ) -> Result<ConsolidationResult, ConsolidationError> {
+    run_consolidation_weighted(conn, session, fired_patterns, 1.0)
+}
+
+/// Run consolidation with session intensity weighting for reinforcement.
+///
+/// `intensity` is `min(1.0, tool_uses / INTENSITY_BASELINE)`.
+///
+/// # Errors
+///
+/// Returns [`ConsolidationError`] if any step fails.
+#[cfg(feature = "sqlite")]
+pub fn run_consolidation_weighted(
+    conn: &Connection,
+    session: u32,
+    fired_patterns: &[&str],
+    intensity: f64,
+) -> Result<ConsolidationResult, ConsolidationError> {
     let tx = conn
         .unchecked_transaction()
         .map_err(|e| ConsolidationError::DecayFailed(e.to_string()))?;
 
     let patterns_decayed = decay_patterns(&tx)?;
-    let patterns_reinforced = reinforce_patterns(&tx, session, fired_patterns)?;
+    let patterns_buoyed = buoy_patterns(&tx, session)?;
+    let patterns_reinforced = reinforce_patterns(&tx, session, fired_patterns, intensity)?;
     let patterns_pruned = prune_patterns(&tx)?;
     let chains_auto_resolved = auto_resolve_chains(&tx, session)?;
 
@@ -97,6 +120,7 @@ pub fn run_consolidation(
 
     Ok(ConsolidationResult {
         patterns_decayed,
+        patterns_buoyed,
         patterns_reinforced,
         patterns_pruned,
         chains_auto_resolved,
@@ -120,6 +144,22 @@ pub fn decay_patterns(conn: &Connection) -> Result<u32, ConsolidationError> {
     decay_all(conn, DECAY_RATE).map_err(|e| ConsolidationError::DecayFailed(e.to_string()))
 }
 
+/// Apply buoy maintenance pulse to qualified pathways (`hit_count >= BUOY_THRESHOLD`).
+///
+/// Fires after decay, before reinforce. Weaker than full reinforcement
+/// (`BUOY_RATE=0.02` vs `REINFORCE_RATE=0.1`), maintains equilibrium at ~0.5.
+/// Permanent: once qualified, always buoyed.
+///
+/// # Errors
+///
+/// Returns [`ConsolidationError::DecayFailed`] if the underlying database
+/// operation fails.
+#[cfg(feature = "sqlite")]
+pub fn buoy_patterns(conn: &Connection, session: u32) -> Result<u32, ConsolidationError> {
+    buoy_qualified(conn, BUOY_RATE, BUOY_THRESHOLD, session, BUOY_TTL_SESSIONS)
+        .map_err(|e| ConsolidationError::DecayFailed(e.to_string()))
+}
+
 /// Reinforce each pattern in `pattern_ids` for the given `session`.
 ///
 /// Calls [`reinforce`] once per `pattern_id` and counts only the patterns
@@ -137,10 +177,25 @@ pub fn reinforce_patterns(
     conn: &Connection,
     session: u32,
     pattern_ids: &[&str],
+    intensity: f64,
 ) -> Result<u32, ConsolidationError> {
+    use crate::m1_foundation::m05_constants::MAX_NATURAL_REINFORCE_PER_CHAIN;
+    use crate::m2_schema::m10_pattern::get_by_id;
+
     let mut found: u32 = 0;
     for &pid in pattern_ids {
-        let was_found = reinforce(conn, pid, session).map_err(|e| {
+        if let Ok(Some(row)) = get_by_id(conn, pid) {
+            let should_skip = row
+                .last_fired_session
+                .is_some_and(|last| {
+                    session.saturating_sub(last) < 3
+                        && row.natural_hit_count >= MAX_NATURAL_REINFORCE_PER_CHAIN
+                });
+            if should_skip {
+                continue;
+            }
+        }
+        let was_found = natural_reinforce_weighted(conn, pid, session, intensity).map_err(|e| {
             ConsolidationError::ReinforceFailed {
                 pattern_id: pid.to_owned(),
                 reason: e.to_string(),
@@ -183,7 +238,8 @@ pub fn prune_patterns(conn: &Connection) -> Result<u32, ConsolidationError> {
 /// database operation fails.
 #[cfg(feature = "sqlite")]
 pub fn auto_resolve_chains(conn: &Connection, session: u32) -> Result<u32, ConsolidationError> {
-    auto_resolve_stale(conn, session, AUTO_RESOLVE_SESSIONS).map_err(|e| {
+    auto_resolve_stale_typed(conn, session, AUTO_RESOLVE_SESSIONS, AUTO_RESOLVE_PLAN_SESSIONS)
+        .map_err(|e| {
         ConsolidationError::ChainReinforcementFailed {
             chain_id: 0,
             reason: e.to_string(),
@@ -248,6 +304,7 @@ mod tests {
         fn consolidation_result_derives_eq() {
             let a = ConsolidationResult {
                 patterns_decayed: 1,
+                patterns_buoyed: 0,
                 patterns_reinforced: 2,
                 patterns_pruned: 3,
                 chains_auto_resolved: 4,
@@ -268,6 +325,7 @@ mod tests {
         fn consolidation_result_serde_roundtrip_nonzero() {
             let r = ConsolidationResult {
                 patterns_decayed: 7,
+                patterns_buoyed: 0,
                 patterns_reinforced: 3,
                 patterns_pruned: 2,
                 chains_auto_resolved: 1,
@@ -281,6 +339,7 @@ mod tests {
         fn consolidation_result_debug_contains_fields() {
             let r = ConsolidationResult {
                 patterns_decayed: 5,
+                patterns_buoyed: 0,
                 patterns_reinforced: 0,
                 patterns_pruned: 1,
                 chains_auto_resolved: 2,
@@ -304,14 +363,15 @@ mod tests {
         }
 
         #[test]
-        fn decay_patterns_skips_unfired_patterns() {
+        fn decay_patterns_clamps_unfired_at_floor() {
+            use crate::m1_foundation::m05_constants::SEEDED_PATTERN_FLOOR;
             let conn = mem();
             seed_unfired(&conn, "p-unfired");
+            // Unfired at 0.5 > floor 0.3 — gets decayed but clamped
             let n = decay_patterns(&conn).expect("decay_patterns");
-            assert_eq!(n, 0);
-            // weight must be unchanged (schema default = 0.5)
+            assert_eq!(n, 1);
             let row = get_by_id(&conn, "p-unfired").expect("get_by_id").expect("row");
-            assert!((row.weight - 0.5).abs() < f64::EPSILON);
+            assert!(row.weight >= SEEDED_PATTERN_FLOOR);
         }
 
         #[test]
@@ -341,8 +401,9 @@ mod tests {
                 seed_fired(&conn, &format!("pf-{i}"));
             }
             seed_unfired(&conn, "pu-0");
+            // 5 fired + 1 unfired above floor = 6
             let n = decay_patterns(&conn).expect("decay_patterns");
-            assert_eq!(n, 5);
+            assert_eq!(n, 6);
         }
 
         // ------------------------------------------------------------------
@@ -353,14 +414,14 @@ mod tests {
         fn reinforce_patterns_empty_slice_returns_zero() {
             let conn = mem();
             seed_unfired(&conn, "p0");
-            let n = reinforce_patterns(&conn, 110, &[]).expect("reinforce_patterns");
+            let n = reinforce_patterns(&conn, 110, &[], 1.0).expect("reinforce_patterns");
             assert_eq!(n, 0);
         }
 
         #[test]
         fn reinforce_patterns_all_missing_returns_zero() {
             let conn = mem();
-            let n = reinforce_patterns(&conn, 110, &["no-such-id", "also-missing"])
+            let n = reinforce_patterns(&conn, 110, &["no-such-id", "also-missing"], 1.0)
                 .expect("reinforce_patterns");
             assert_eq!(n, 0);
         }
@@ -369,7 +430,7 @@ mod tests {
         fn reinforce_patterns_found_pattern_returns_one() {
             let conn = mem();
             seed_unfired(&conn, "p-found");
-            let n = reinforce_patterns(&conn, 110, &["p-found"]).expect("reinforce_patterns");
+            let n = reinforce_patterns(&conn, 110, &["p-found"], 1.0).expect("reinforce_patterns");
             assert_eq!(n, 1);
         }
 
@@ -377,7 +438,7 @@ mod tests {
         fn reinforce_patterns_mixed_found_and_missing() {
             let conn = mem();
             seed_unfired(&conn, "p-exists");
-            let n = reinforce_patterns(&conn, 110, &["p-exists", "p-missing"])
+            let n = reinforce_patterns(&conn, 110, &["p-exists", "p-missing"], 1.0)
                 .expect("reinforce_patterns");
             assert_eq!(n, 1);
         }
@@ -389,7 +450,7 @@ mod tests {
                 seed_unfired(&conn, &format!("prf-{i}"));
             }
             let ids = ["prf-0", "prf-1", "prf-2", "prf-3"];
-            let n = reinforce_patterns(&conn, 110, &ids).expect("reinforce_patterns");
+            let n = reinforce_patterns(&conn, 110, &ids, 1.0).expect("reinforce_patterns");
             assert_eq!(n, 4);
         }
 
@@ -397,7 +458,7 @@ mod tests {
         fn reinforce_patterns_updates_last_fired_session() {
             let conn = mem();
             seed_unfired(&conn, "p-sess");
-            reinforce_patterns(&conn, 42, &["p-sess"]).expect("reinforce_patterns");
+            reinforce_patterns(&conn, 42, &["p-sess"], 1.0).expect("reinforce_patterns");
             let row = get_by_id(&conn, "p-sess").expect("g").expect("r");
             assert_eq!(row.last_fired_session, Some(42));
         }
@@ -407,7 +468,7 @@ mod tests {
             let conn = mem();
             seed_unfired(&conn, "p-wt");
             let before = get_by_id(&conn, "p-wt").expect("g").expect("r").weight;
-            reinforce_patterns(&conn, 110, &["p-wt"]).expect("reinforce_patterns");
+            reinforce_patterns(&conn, 110, &["p-wt"], 1.0).expect("reinforce_patterns");
             let after = get_by_id(&conn, "p-wt").expect("g").expect("r").weight;
             let expected = before + REINFORCE_RATE * (1.0 - before);
             assert!((after - expected).abs() < 1e-10);
@@ -418,7 +479,7 @@ mod tests {
             let conn = mem();
             seed_unfired(&conn, "p-hc");
             let before = get_by_id(&conn, "p-hc").expect("g").expect("r").hit_count;
-            reinforce_patterns(&conn, 110, &["p-hc"]).expect("reinforce_patterns");
+            reinforce_patterns(&conn, 110, &["p-hc"], 1.0).expect("reinforce_patterns");
             let after = get_by_id(&conn, "p-hc").expect("g").expect("r").hit_count;
             assert_eq!(after, before + 1);
         }
@@ -428,7 +489,7 @@ mod tests {
             // Providing the same id twice counts as two found hits.
             let conn = mem();
             seed_unfired(&conn, "p-dup");
-            let n = reinforce_patterns(&conn, 110, &["p-dup", "p-dup"])
+            let n = reinforce_patterns(&conn, 110, &["p-dup", "p-dup"], 1.0)
                 .expect("reinforce_patterns");
             assert_eq!(n, 2);
             let row = get_by_id(&conn, "p-dup").expect("g").expect("r");
@@ -515,7 +576,7 @@ mod tests {
         fn auto_resolve_chains_fresh_chain_not_resolved() {
             let conn = mem();
             // origin 119, current 120, threshold 10 → gap 1 < 10 → not stale
-            insert_chain(&conn, 119, "bug", "FRESH-CHAIN", "x").expect("insert_chain");
+            insert_chain(&conn, 119, "trap", "FRESH-CHAIN", "x").expect("insert_chain");
             let n = auto_resolve_chains(&conn, 120).expect("auto_resolve_chains");
             assert_eq!(n, 0);
         }
@@ -524,7 +585,7 @@ mod tests {
         fn auto_resolve_chains_stale_chain_resolved() {
             let conn = mem();
             // origin 100, current 120, threshold=AUTO_RESOLVE_SESSIONS=10 → 20 ≥ 10 → stale
-            insert_chain(&conn, 100, "bug", "STALE-CHAIN", "x").expect("insert_chain");
+            insert_chain(&conn, 100, "trap", "STALE-CHAIN", "x").expect("insert_chain");
             let n = auto_resolve_chains(&conn, 120).expect("auto_resolve_chains");
             assert_eq!(n, 1);
             let row = find_by_label(&conn, "STALE-CHAIN").expect("g").expect("r");
@@ -537,7 +598,7 @@ mod tests {
             // gap = AUTO_RESOLVE_SESSIONS - 1 → NOT stale
             let current = 120_u32;
             let origin = current - AUTO_RESOLVE_SESSIONS + 1;
-            insert_chain(&conn, origin, "bug", "BOUND-EX", "x").expect("insert_chain");
+            insert_chain(&conn, origin, "trap", "BOUND-EX", "x").expect("insert_chain");
             let n = auto_resolve_chains(&conn, current).expect("auto_resolve_chains");
             assert_eq!(n, 0);
         }
@@ -548,7 +609,7 @@ mod tests {
             // gap == AUTO_RESOLVE_SESSIONS → stale
             let current = 120_u32;
             let origin = current - AUTO_RESOLVE_SESSIONS;
-            insert_chain(&conn, origin, "bug", "BOUND-IN", "x").expect("insert_chain");
+            insert_chain(&conn, origin, "trap", "BOUND-IN", "x").expect("insert_chain");
             let n = auto_resolve_chains(&conn, current).expect("auto_resolve_chains");
             assert_eq!(n, 1);
         }
@@ -557,7 +618,7 @@ mod tests {
         fn auto_resolve_chains_multiple_stale_resolved() {
             let conn = mem();
             for i in 0..3_u32 {
-                insert_chain(&conn, 100, "bug", &format!("STALE-M{i}"), "x")
+                insert_chain(&conn, 100, "trap", &format!("STALE-M{i}"), "x")
                     .expect("insert_chain");
             }
             let n = auto_resolve_chains(&conn, 120).expect("auto_resolve_chains");
@@ -578,17 +639,17 @@ mod tests {
         #[test]
         fn run_consolidation_full_cycle_seeded_data() {
             let conn = mem();
-            // Two fired patterns (will be decayed), one unfired (will not be decayed).
+            // Two fired patterns (will be decayed), one unfired (decayed with floor).
             seed_fired(&conn, "fired-a");
             seed_fired(&conn, "fired-b");
             seed_unfired(&conn, "unfired-c");
-            // One stale causal chain.
-            insert_chain(&conn, 100, "bug", "STALE-CC", "x").expect("insert_chain");
+            // One stale causal chain (trap — eligible for auto-resolve).
+            insert_chain(&conn, 100, "trap", "STALE-CC", "x").expect("insert_chain");
 
             let r = run_consolidation(&conn, 120, &["fired-a"]).expect("run_consolidation");
 
-            // decay touched both fired patterns
-            assert_eq!(r.patterns_decayed, 2);
+            // decay touched 2 fired + 1 unfired above floor = 3
+            assert_eq!(r.patterns_decayed, 3);
             // reinforce found "fired-a" only
             assert_eq!(r.patterns_reinforced, 1);
             // nothing pruned (all weights are still well above threshold)
@@ -701,13 +762,13 @@ mod tests {
             }
             // 2 stale causal chains
             for i in 0..2_u32 {
-                insert_chain(&conn, 100, "bug", &format!("acc-cc{i}"), "x").expect("insert_chain");
+                insert_chain(&conn, 100, "trap", &format!("acc-cc{i}"), "x").expect("insert_chain");
             }
 
             // Fire "acc-f0" explicitly; "acc-f1" and "acc-f2" are fired but will be pruned.
             let r = run_consolidation(&conn, 120, &["acc-f0"]).expect("run_consolidation");
 
-            assert_eq!(r.patterns_decayed, 3, "all 3 fired patterns decayed");
+            assert_eq!(r.patterns_decayed, 5, "3 fired + 2 unfired above floor decayed");
             assert_eq!(r.patterns_reinforced, 1, "only acc-f0 reinforced");
             assert_eq!(r.patterns_pruned, 2, "acc-f1 and acc-f2 pruned");
             assert_eq!(r.chains_auto_resolved, 2, "both stale chains resolved");
@@ -778,15 +839,16 @@ mod tests {
         }
 
         #[test]
-        fn unfired_pattern_weight_unchanged_by_full_cycle() {
-            // An unfired pattern listed in fired_patterns: gets reinforced only (no decay step).
+        fn unfired_pattern_weight_decayed_then_reinforced() {
+            // An unfired pattern listed in fired_patterns: decayed with floor, then reinforced.
             let conn = mem();
             seed_unfired(&conn, "unfired-in-list");
             let w0 = get_by_id(&conn, "unfired-in-list").expect("g").expect("r").weight;
             run_consolidation(&conn, 110, &["unfired-in-list"]).expect("run");
             let w1 = get_by_id(&conn, "unfired-in-list").expect("g").expect("r").weight;
-            // decay skipped it (last_fired_session IS NULL), reinforce applied.
-            let expected = w0 + REINFORCE_RATE * (1.0 - w0);
+            // Decay applied first (w0*DECAY_RATE), then reinforce.
+            let after_decay = w0 * DECAY_RATE;
+            let expected = after_decay + REINFORCE_RATE * (1.0 - after_decay);
             assert!((w1 - expected).abs() < 1e-10);
         }
 
@@ -860,7 +922,7 @@ mod tests {
             let conn = mem();
             let ids: Vec<String> = (0..50).map(|i| format!("missing-{i}")).collect();
             let id_refs: Vec<&str> = ids.iter().map(String::as_str).collect();
-            let n = reinforce_patterns(&conn, 110, &id_refs).expect("reinforce_patterns");
+            let n = reinforce_patterns(&conn, 110, &id_refs, 1.0).expect("reinforce_patterns");
             assert_eq!(n, 0);
         }
 
@@ -895,6 +957,7 @@ mod tests {
         fn consolidation_result_eq_same_values() {
             let a = ConsolidationResult {
                 patterns_decayed: 3,
+                patterns_buoyed: 0,
                 patterns_reinforced: 2,
                 patterns_pruned: 1,
                 chains_auto_resolved: 0,

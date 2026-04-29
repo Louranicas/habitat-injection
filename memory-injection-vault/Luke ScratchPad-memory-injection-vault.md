@@ -1,5 +1,13 @@
 
+correct way to put a token in without causing security issues 
 
+ ! echo "glpat-brHcLEh_7Tt7InPyL1C2RG86MQp1Omp5MDJnCw.01.121i2g1ei" > /tmp/.gl-token
+
+
+
+
+Massive session. The Hebbian buoy system went from concept to production across assessment, hardening plan, perfection plan, dual gap analysis, and 4 NA items — all in one context window. The one carry-forward: a linter/hook is injecting hallucinated functions into m06_schema.rs and m16_hebbian_engine.rs that need to be identified and stopped
+before the final commit.
 
 
 ----

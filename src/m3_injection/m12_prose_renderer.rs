@@ -373,6 +373,28 @@ pub fn render_chains(entries: &[ChainEntry], limit: usize) -> String {
     out
 }
 
+/// Renders the learned patterns section with tier labels and recency.
+#[must_use]
+#[allow(clippy::items_after_statements)]
+pub fn render_patterns(patterns: &[PatternEntry], limit: usize) -> String {
+    if patterns.is_empty() {
+        return String::new();
+    }
+    use std::fmt::Write;
+    let mut out = String::from("### Learned Patterns (top 5 by weight)\n");
+    for entry in patterns.iter().take(limit) {
+        let tier = if entry.weight >= 0.7 {
+            "ACTIVE"
+        } else if entry.weight >= 0.4 {
+            "BUOYED"
+        } else {
+            "FLOOR"
+        };
+        let _ = writeln!(out, "{} ({:.2} {tier}) \u{2014} {}", entry.pattern_id, entry.weight, entry.description);
+    }
+    out
+}
+
 /// Renders the health section.
 ///
 /// All-green:   `All {N} services responding. Thermal {T:.3} ({status}).`
@@ -430,6 +452,7 @@ pub fn render(
         &input.deferred_workstreams,
     );
     let chains = render_chains(&input.chains, MAX_CHAINS_INJECTED);
+    let patterns = render_patterns(&input.patterns, 5);
     let health = render_health(input.services_healthy, input.services_total, input.thermal);
 
     // ---- Greedy assembly with budget enforcement ----
@@ -441,6 +464,7 @@ pub fn render(
     let trajectory_tokens = count_tokens(&trajectory);
     let workstreams_tokens = count_tokens(&workstreams);
     let chains_tokens = count_tokens(&chains);
+    let patterns_tokens = count_tokens(&patterns);
     let health_tokens = count_tokens(&health);
 
     // Orientation is mandatory.
@@ -460,6 +484,7 @@ pub fn render(
     let mut include_trajectory = false;
     let mut include_workstreams = false;
     let mut include_chains = false;
+    let mut include_patterns = false;
     let mut include_health = false;
 
     // Add in priority order
@@ -474,6 +499,10 @@ pub fn render(
     if remaining >= chains_tokens {
         remaining = remaining.saturating_sub(chains_tokens);
         include_chains = true;
+    }
+    if remaining >= patterns_tokens {
+        remaining = remaining.saturating_sub(patterns_tokens);
+        include_patterns = true;
     }
     if remaining >= health_tokens {
         include_health = true;
@@ -495,6 +524,10 @@ pub fn render(
     if include_chains {
         payload.push('\n');
         payload.push_str(&chains);
+    }
+    if include_patterns {
+        payload.push('\n');
+        payload.push_str(&patterns);
     }
     if include_health {
         payload.push('\n');

@@ -36,11 +36,17 @@ pub struct PatternRow {
     pub anti_pattern: Option<String>,
     /// Hebbian weight in `[0.0, 1.0)`. Asymptotes toward `1.0` via `reinforce`.
     pub weight: f64,
-    /// Number of times this pattern has been fired.
+    /// Number of times this pattern has been fired (natural + auto combined).
     pub hit_count: u32,
     /// Session number when the pattern was last fired, or `None` if never fired
     /// after initial insertion.
     pub last_fired_session: Option<u32>,
+    /// Firings from context-matched session activity only. Buoy qualifies on this.
+    #[serde(default)]
+    pub natural_hit_count: u32,
+    /// Comma-separated keywords for context matching against atuin history.
+    #[serde(default)]
+    pub keywords: String,
     /// Consent level — one of `Emit`, `Store`, `Forget`.
     pub consent: String,
 }
@@ -60,7 +66,9 @@ fn row_to_pattern(row: &rusqlite::Row<'_>) -> rusqlite::Result<PatternRow> {
         weight: row.get(4)?,
         hit_count: row.get::<_, u32>(5)?,
         last_fired_session: row.get::<_, Option<u32>>(6)?,
-        consent: row.get(7)?,
+        natural_hit_count: row.get::<_, u32>(7)?,
+        keywords: row.get::<_, String>(8)?,
+        consent: row.get(9)?,
     })
 }
 
@@ -94,8 +102,59 @@ pub fn insert_pattern(
     Ok(())
 }
 
-/// Reinforce a pattern: `weight += 0.1 * (1 - weight)`, `hit_count++`,
-/// `last_fired_session = session`.
+/// Naturally reinforce a pattern from context-matched session activity.
+///
+/// Increments both `hit_count` and `natural_hit_count`. Buoy qualifies
+/// on `natural_hit_count` only, so this is the path that earns buoy
+/// protection.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
+pub fn natural_reinforce(
+    conn: &Connection,
+    pattern_id: &str,
+    session: u32,
+) -> Result<bool, SchemaError> {
+    natural_reinforce_weighted(conn, pattern_id, session, 1.0)
+}
+
+/// Naturally reinforce with session intensity weighting.
+///
+/// `intensity` is in `[0.0, 1.0]` — derived from `min(1.0, tool_uses / BASELINE)`.
+/// The weight update is `weight += REINFORCE_RATE * intensity * (1 - weight)`.
+/// A 10-minute session with 5 tool calls gets weaker reinforcement than an
+/// 8-hour session with 500 calls.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
+pub fn natural_reinforce_weighted(
+    conn: &Connection,
+    pattern_id: &str,
+    session: u32,
+    intensity: f64,
+) -> Result<bool, SchemaError> {
+    let rate = 0.1 * intensity.clamp(0.0, 1.0);
+    let updated = conn
+        .execute(
+            "UPDATE reinforced_pattern
+             SET weight              = weight + ?3 * (1.0 - weight),
+                 hit_count           = hit_count + 1,
+                 natural_hit_count   = natural_hit_count + 1,
+                 last_fired_session  = ?2,
+                 updated_at          = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE pattern_id = ?1",
+            params![pattern_id, session, rate],
+        )
+        .map_err(|e| sqlite_err(&e))?;
+    Ok(updated > 0)
+}
+
+/// Auto-reinforce a pattern (blanket fire). Increments `hit_count` only —
+/// does NOT increment `natural_hit_count`. Buoy will not qualify on this.
 ///
 /// Returns `true` if the `pattern_id` was found and updated, `false` if no
 /// row existed.
@@ -126,6 +185,9 @@ pub fn reinforce(
 /// Apply Hebbian decay to all patterns that have been fired at least once
 /// (`last_fired_session IS NOT NULL`): `weight *= rate`.
 ///
+/// Unfired patterns (seeded but never reinforced) decay with a floor at
+/// `SEEDED_PATTERN_FLOOR` to prevent extinction before being tested.
+///
 /// Returns the number of rows updated.
 ///
 /// # Errors
@@ -133,7 +195,9 @@ pub fn reinforce(
 /// Returns [`SchemaError::Sqlite`] on database error.
 #[cfg(feature = "sqlite")]
 pub fn decay_all(conn: &Connection, rate: f64) -> Result<u32, SchemaError> {
-    let updated = conn
+    use crate::m1_foundation::m05_constants::SEEDED_PATTERN_FLOOR;
+
+    let fired = conn
         .execute(
             "UPDATE reinforced_pattern
              SET weight     = weight * ?1,
@@ -142,7 +206,18 @@ pub fn decay_all(conn: &Connection, rate: f64) -> Result<u32, SchemaError> {
             params![rate],
         )
         .map_err(|e| sqlite_err(&e))?;
-    Ok(u32::try_from(updated).unwrap_or(u32::MAX))
+
+    let unfired = conn
+        .execute(
+            "UPDATE reinforced_pattern
+             SET weight     = MAX(?1, weight * ?2),
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE last_fired_session IS NULL AND weight > ?1",
+            params![SEEDED_PATTERN_FLOOR, rate],
+        )
+        .map_err(|e| sqlite_err(&e))?;
+
+    Ok(u32::try_from(fired + unfired).unwrap_or(u32::MAX))
 }
 
 /// Delete all patterns whose `weight` is strictly below `threshold`.
@@ -176,7 +251,7 @@ pub fn get_top_by_weight(
     let mut stmt = conn
         .prepare(
             "SELECT pattern_id, category, description, anti_pattern,
-                    weight, hit_count, last_fired_session, consent
+                    weight, hit_count, last_fired_session, natural_hit_count, keywords, consent
              FROM reinforced_pattern
              ORDER BY weight DESC
              LIMIT ?1",
@@ -206,7 +281,7 @@ pub fn get_by_id(
     let mut stmt = conn
         .prepare(
             "SELECT pattern_id, category, description, anti_pattern,
-                    weight, hit_count, last_fired_session, consent
+                    weight, hit_count, last_fired_session, natural_hit_count, keywords, consent
              FROM reinforced_pattern
              WHERE pattern_id = ?1",
         )
@@ -231,7 +306,7 @@ pub fn get_by_category(
     let mut stmt = conn
         .prepare(
             "SELECT pattern_id, category, description, anti_pattern,
-                    weight, hit_count, last_fired_session, consent
+                    weight, hit_count, last_fired_session, natural_hit_count, keywords, consent
              FROM reinforced_pattern
              WHERE category = ?1
              ORDER BY weight DESC",
@@ -244,6 +319,67 @@ pub fn get_by_category(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| sqlite_err(&e))?;
 
+    Ok(rows)
+}
+
+/// Apply buoy maintenance pulse to all qualified pathways.
+///
+/// A pathway qualifies when `hit_count >= threshold` (it has been naturally
+/// reinforced enough times to prove its value). The buoy pulse is weaker than
+/// full reinforcement: `weight += buoy_rate * (1 - weight)`.
+///
+/// Permanent: once qualified, always buoyed. No re-qualification needed.
+///
+/// Returns the number of rows updated.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
+pub fn buoy_qualified(
+    conn: &Connection,
+    buoy_rate: f64,
+    hit_threshold: u32,
+    current_session: u32,
+    ttl_sessions: u32,
+) -> Result<u32, SchemaError> {
+    let updated = conn
+        .execute(
+            "UPDATE reinforced_pattern
+             SET weight     = weight + ?1 * (1.0 - weight),
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE natural_hit_count >= ?2
+               AND last_fired_session IS NOT NULL
+               AND (?3 - last_fired_session) < ?4",
+            params![buoy_rate, hit_threshold, current_session, ttl_sessions],
+        )
+        .map_err(|e| sqlite_err(&e))?;
+    Ok(u32::try_from(updated).unwrap_or(u32::MAX))
+}
+
+/// Return all pattern IDs grouped by category.
+///
+/// Returns a flat list of `(pattern_id, category)` pairs for every row.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::Sqlite`] on database error.
+#[cfg(feature = "sqlite")]
+pub fn list_all_ids(conn: &Connection) -> Result<Vec<(String, String, String)>, SchemaError> {
+    let mut stmt = conn
+        .prepare("SELECT pattern_id, category, keywords FROM reinforced_pattern")
+        .map_err(|e| sqlite_err(&e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| sqlite_err(&e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| sqlite_err(&e))?;
     Ok(rows)
 }
 
@@ -475,26 +611,40 @@ mod tests {
 
     #[test]
     #[cfg(feature = "sqlite")]
-    fn decay_all_returns_zero_when_no_fired_patterns() {
+    fn decay_all_returns_zero_when_no_fired_patterns_below_floor() {
+        use crate::m1_foundation::m05_constants::SEEDED_PATTERN_FLOOR;
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
-        // last_fired_session is NULL — should not be decayed
+        // Unfired at 0.5 is above floor (0.3) — decays but clamps at floor
         let updated = decay_all(&conn, 0.95).unwrap();
-        assert_eq!(updated, 0);
+        assert_eq!(updated, 1);
+        let p = get_by_id(&conn, "p1").unwrap().unwrap();
+        assert!(p.weight >= SEEDED_PATTERN_FLOOR);
     }
 
     #[test]
     #[cfg(feature = "sqlite")]
-    fn decay_all_only_affects_fired_patterns() {
+    fn decay_all_unfired_clamps_at_floor() {
+        use crate::m1_foundation::m05_constants::SEEDED_PATTERN_FLOOR;
+        let conn = mem();
+        insert_pattern(&conn, "p1", "trap", "desc", None).unwrap();
+        // Repeatedly decay — unfired pattern should never go below floor
+        for _ in 0..200 {
+            decay_all(&conn, 0.95).unwrap();
+        }
+        let p = get_by_id(&conn, "p1").unwrap().unwrap();
+        assert!((p.weight - SEEDED_PATTERN_FLOOR).abs() < 1e-9);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn decay_all_fired_and_unfired_counted() {
         let conn = mem();
         insert_pattern(&conn, "p1", "trap", "desc", None).unwrap(); // unfired
         insert_pattern(&conn, "p2", "semantic", "desc2", None).unwrap(); // unfired
         reinforce(&conn, "p2", 109).unwrap(); // now fired
         let updated = decay_all(&conn, 0.95).unwrap();
-        assert_eq!(updated, 1);
-        // p1 weight unchanged (0.5)
-        let p1 = get_by_id(&conn, "p1").unwrap().unwrap();
-        assert!((p1.weight - 0.5).abs() < f64::EPSILON);
+        assert_eq!(updated, 2);
     }
 
     #[test]
@@ -518,8 +668,9 @@ mod tests {
             reinforce(&conn, &format!("p{i}"), 109).unwrap();
         }
         insert_pattern(&conn, "unfired", "semantic", "desc", None).unwrap();
+        // 5 fired + 1 unfired above floor = 6
         let updated = decay_all(&conn, 0.9).unwrap();
-        assert_eq!(updated, 5);
+        assert_eq!(updated, 6);
     }
 
     #[test]
@@ -1007,5 +1158,113 @@ mod tests {
         }
         let row = get_by_id(&conn, "p1").unwrap().unwrap();
         assert!((row.weight - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn three_tier_separation_holds_over_100_sessions() {
+        use crate::m1_foundation::m05_constants::{BUOY_RATE, BUOY_THRESHOLD, BUOY_TTL_SESSIONS, DECAY_RATE, SEEDED_PATTERN_FLOOR};
+
+        let conn = mem();
+        for i in 0..5_u32 {
+            insert_pattern(&conn, &format!("active-{i}"), "procedural", "active pattern", None).unwrap();
+            insert_pattern(&conn, &format!("buoyed-{i}"), "procedural", "buoyed pattern", None).unwrap();
+            insert_pattern(&conn, &format!("floor-{i}"), "procedural", "floor pattern", None).unwrap();
+        }
+
+        for session in 1..=100_u32 {
+            decay_all(&conn, DECAY_RATE).unwrap();
+            buoy_qualified(&conn, BUOY_RATE, BUOY_THRESHOLD, session, BUOY_TTL_SESSIONS).unwrap();
+
+            if session % 5 == 0 {
+                for i in 0..5_u32 {
+                    natural_reinforce(&conn, &format!("active-{i}"), session).unwrap();
+                }
+            }
+            if session <= 20 && session % 5 == 0 {
+                for i in 0..5_u32 {
+                    natural_reinforce(&conn, &format!("buoyed-{i}"), session).unwrap();
+                }
+            }
+        }
+
+        let avg = |prefix: &str| -> f64 {
+            let mut sum = 0.0;
+            let mut count = 0_u32;
+            for i in 0..5_u32 {
+                let row = get_by_id(&conn, &format!("{prefix}{i}")).unwrap().unwrap();
+                sum += row.weight;
+                count += 1;
+            }
+            sum / f64::from(count)
+        };
+
+        let active_avg = avg("active-");
+        let buoyed_avg = avg("buoyed-");
+        let floor_avg = avg("floor-");
+
+        assert!(active_avg > 0.65, "active tier should be >0.65, was {active_avg}");
+        assert!(buoyed_avg > 0.4 && buoyed_avg < 0.65, "buoyed tier should be 0.4-0.65, was {buoyed_avg}");
+        assert!((floor_avg - SEEDED_PATTERN_FLOOR).abs() < 0.05, "floor should be ~0.3, was {floor_avg}");
+        assert!(active_avg - buoyed_avg > 0.15, "active-buoyed gap too small: {}", active_avg - buoyed_avg);
+        assert!(buoyed_avg - floor_avg > 0.1, "buoyed-floor gap too small: {}", buoyed_avg - floor_avg);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn natural_reinforce_increments_both_counters() {
+        let conn = mem();
+        insert_pattern(&conn, "p1", "feedback", "desc", None).unwrap();
+        natural_reinforce(&conn, "p1", 100).unwrap();
+        natural_reinforce(&conn, "p1", 101).unwrap();
+        let row = get_by_id(&conn, "p1").unwrap().unwrap();
+        assert_eq!(row.hit_count, 3);
+        assert_eq!(row.natural_hit_count, 2);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn auto_reinforce_does_not_increment_natural() {
+        let conn = mem();
+        insert_pattern(&conn, "p1", "feedback", "desc", None).unwrap();
+        reinforce(&conn, "p1", 100).unwrap();
+        reinforce(&conn, "p1", 101).unwrap();
+        let row = get_by_id(&conn, "p1").unwrap().unwrap();
+        assert_eq!(row.hit_count, 3);
+        assert_eq!(row.natural_hit_count, 0);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn buoy_qualification_uses_natural_count() {
+        use crate::m1_foundation::m05_constants::{BUOY_RATE, BUOY_THRESHOLD};
+        let conn = mem();
+        insert_pattern(&conn, "auto-only", "procedural", "desc", None).unwrap();
+        insert_pattern(&conn, "natural", "procedural", "desc", None).unwrap();
+
+        for s in 0..10_u32 {
+            reinforce(&conn, "auto-only", s).unwrap();
+        }
+        for s in 0..3_u32 {
+            natural_reinforce(&conn, "natural", s).unwrap();
+        }
+
+        let w_auto_before = get_by_id(&conn, "auto-only").unwrap().unwrap().weight;
+        let w_nat_before = get_by_id(&conn, "natural").unwrap().unwrap().weight;
+
+        buoy_qualified(&conn, BUOY_RATE, BUOY_THRESHOLD, 10, 100).unwrap();
+
+        let w_auto_after = get_by_id(&conn, "auto-only").unwrap().unwrap().weight;
+        let w_nat_after = get_by_id(&conn, "natural").unwrap().unwrap().weight;
+
+        assert!((w_auto_after - w_auto_before).abs() < 1e-10, "auto-only should NOT be buoyed");
+        assert!(w_nat_after > w_nat_before, "natural should be buoyed");
+    }
+
+    #[test]
+    fn buoy_equilibrium_converges_to_half() {
+        use crate::m1_foundation::m05_constants::{BUOY_RATE, DECAY_RATE};
+        let equilibrium = BUOY_RATE / (1.0 - DECAY_RATE + BUOY_RATE);
+        assert!((equilibrium - 0.5).abs() < 0.01, "equilibrium should be ~0.5, was {equilibrium}");
     }
 }

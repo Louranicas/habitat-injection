@@ -317,6 +317,8 @@ mod tests {
             weight: 0.5,
             hit_count: 1,
             last_fired_session: None,
+            natural_hit_count: 0,
+            keywords: String::new(),
             consent: consent.into(),
         }
     }

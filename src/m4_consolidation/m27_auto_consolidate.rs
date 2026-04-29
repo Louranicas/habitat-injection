@@ -87,8 +87,64 @@ pub fn start_timer(
                 }
                 Err(e) => warn!(error = %e, "timer: cache rebuild failed"),
             }
+
+            let matched = precompute_keyword_matches(&conn);
+            if !matched.is_empty() {
+                let csv = matched.join(",");
+                let _ = conn.execute(
+                    "INSERT INTO daemon_state (key, value, updated_at)
+                     VALUES ('cached_keyword_matches', ?1, unixepoch())
+                     ON CONFLICT(key) DO UPDATE SET value = ?1, updated_at = unixepoch()",
+                    rusqlite::params![csv],
+                );
+                info!(count = matched.len(), "timer: keyword matches pre-cached");
+            }
         }
     })
+}
+
+// ---------------------------------------------------------------------------
+// Keyword match pre-computation (daemon hybrid cache)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "sqlite")]
+fn precompute_keyword_matches(conn: &rusqlite::Connection) -> Vec<String> {
+    let Ok(ids) = crate::m2_schema::m10_pattern::list_all_ids(conn) else {
+        return Vec::new();
+    };
+
+    let history = fetch_atuin_history_for_cache();
+
+    ids.into_iter()
+        .filter(|(_, _, keywords)| {
+            if keywords.is_empty() {
+                return false;
+            }
+            keywords.split(',').any(|kw| {
+                let kw = kw.trim().to_lowercase();
+                !kw.is_empty() && history.iter().any(|cmd| cmd.contains(&kw))
+            })
+        })
+        .map(|(pattern_id, _, _)| pattern_id)
+        .collect()
+}
+
+#[cfg(feature = "sqlite")]
+fn fetch_atuin_history_for_cache() -> Vec<String> {
+    std::process::Command::new("atuin")
+        .args([
+            "history", "list", "--format", "{command}", "--after", "6 hours ago", "--limit", "1000",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_lowercase)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------

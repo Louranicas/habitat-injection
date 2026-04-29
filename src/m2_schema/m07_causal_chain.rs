@@ -260,12 +260,29 @@ pub fn auto_resolve_stale(
     current_session: u32,
     threshold: u32,
 ) -> Result<u32, SchemaError> {
-    let rows_changed = conn
+    auto_resolve_stale_typed(conn, current_session, threshold, threshold)
+}
+
+/// Type-aware auto-resolve: traps/patterns use `trap_threshold`, plans use
+/// `plan_threshold`, bugs are **never** auto-resolved.
+///
+/// # Errors
+///
+/// Returns [`SchemaError::Sqlite`] on database failure.
+#[cfg(feature = "sqlite")]
+pub fn auto_resolve_stale_typed(
+    conn: &Connection,
+    current_session: u32,
+    trap_threshold: u32,
+    plan_threshold: u32,
+) -> Result<u32, SchemaError> {
+    let trap_resolved = conn
         .execute(
             "UPDATE causal_chain
              SET resolved_session = ?1,
                  updated_at       = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE resolved_session IS NULL
+               AND chain_type IN ('trap', 'pattern')
                AND (
                      (last_reinforced_session IS NOT NULL
                       AND (?1 - last_reinforced_session) >= ?2)
@@ -273,12 +290,30 @@ pub fn auto_resolve_stale(
                      (last_reinforced_session IS NULL
                       AND (?1 - origin_session) >= ?2)
                )",
-            params![current_session, threshold],
+            params![current_session, trap_threshold],
+        )
+        .map_err(|e| sqlite_err(&e))?;
+
+    let plan_resolved = conn
+        .execute(
+            "UPDATE causal_chain
+             SET resolved_session = ?1,
+                 updated_at       = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE resolved_session IS NULL
+               AND chain_type = 'plan'
+               AND (
+                     (last_reinforced_session IS NOT NULL
+                      AND (?1 - last_reinforced_session) >= ?2)
+                  OR
+                     (last_reinforced_session IS NULL
+                      AND (?1 - origin_session) >= ?2)
+               )",
+            params![current_session, plan_threshold],
         )
         .map_err(|e| sqlite_err(&e))?;
 
     #[allow(clippy::cast_possible_truncation)]
-    Ok(rows_changed as u32)
+    Ok((trap_resolved + plan_resolved) as u32)
 }
 
 /// Count the number of unresolved chains (`resolved_session IS NULL`).
@@ -720,7 +755,7 @@ mod tests {
     fn auto_resolve_resolves_stale_by_origin() {
         let conn = open_memory().unwrap();
         // origin 100, current 115, threshold 10 → 15 ≥ 10 → stale
-        insert_chain(&conn, 100, "bug", "STALE-1", "x").unwrap();
+        insert_chain(&conn, 100, "trap", "STALE-1", "x").unwrap();
         let count = auto_resolve_stale(&conn, 115, 10).unwrap();
         assert_eq!(count, 1);
         let row = find_by_label(&conn, "STALE-1").unwrap().unwrap();
@@ -765,12 +800,12 @@ mod tests {
     #[cfg(feature = "sqlite")]
     fn auto_resolve_returns_correct_count_for_multiple() {
         let conn = open_memory().unwrap();
-        // Three stale rows
+        // Three stale rows (trap — eligible for auto-resolve)
         for i in 0..3_u32 {
-            insert_chain(&conn, 100, "bug", &format!("STALE-M{i}"), "x").unwrap();
+            insert_chain(&conn, 100, "trap", &format!("STALE-M{i}"), "x").unwrap();
         }
         // One fresh row
-        insert_chain(&conn, 119, "bug", "FRESH-M", "x").unwrap();
+        insert_chain(&conn, 119, "trap", "FRESH-M", "x").unwrap();
         let count = auto_resolve_stale(&conn, 120, 10).unwrap();
         assert_eq!(count, 3);
     }
@@ -790,8 +825,32 @@ mod tests {
     fn auto_resolve_threshold_boundary_inclusive() {
         let conn = open_memory().unwrap();
         // origin 110, current 120, threshold 10 → gap 10 ≥ 10 → stale
-        insert_chain(&conn, 110, "bug", "BOUNDARY2", "x").unwrap();
+        insert_chain(&conn, 110, "trap", "BOUNDARY2", "x").unwrap();
         let count = auto_resolve_stale(&conn, 120, 10).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn auto_resolve_never_resolves_bugs() {
+        let conn = open_memory().unwrap();
+        insert_chain(&conn, 100, "bug", "BUG-FOREVER", "x").unwrap();
+        let count = auto_resolve_stale(&conn, 500, 10).unwrap();
+        assert_eq!(count, 0);
+        let row = find_by_label(&conn, "BUG-FOREVER").unwrap().unwrap();
+        assert!(row.resolved_session.is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn auto_resolve_typed_plans_use_plan_threshold() {
+        let conn = open_memory().unwrap();
+        insert_chain(&conn, 100, "plan", "PLAN-LONG", "x").unwrap();
+        // At session 140 with plan_threshold=50 → gap 40 < 50 → not stale
+        let count = auto_resolve_stale_typed(&conn, 140, 10, 50).unwrap();
+        assert_eq!(count, 0);
+        // At session 155 → gap 55 ≥ 50 → stale
+        let count = auto_resolve_stale_typed(&conn, 155, 10, 50).unwrap();
         assert_eq!(count, 1);
     }
 
@@ -842,7 +901,7 @@ mod tests {
     fn count_unresolved_after_auto_resolve() {
         let conn = open_memory().unwrap();
         for i in 0..5_u32 {
-            insert_chain(&conn, 100, "bug", &format!("AR-{i}"), "x").unwrap();
+            insert_chain(&conn, 100, "trap", &format!("AR-{i}"), "x").unwrap();
         }
         assert_eq!(count_unresolved(&conn).unwrap(), 5);
         auto_resolve_stale(&conn, 120, 10).unwrap();
@@ -1016,9 +1075,9 @@ mod tests {
     #[cfg(feature = "sqlite")]
     fn auto_resolve_threshold_zero_resolves_all() {
         let conn = open_memory().unwrap();
-        insert_chain(&conn, 109, "bug", "TH0-A", "x").unwrap();
-        insert_chain(&conn, 109, "bug", "TH0-B", "y").unwrap();
-        // gap ≥ 0 is always true
+        insert_chain(&conn, 109, "trap", "TH0-A", "x").unwrap();
+        insert_chain(&conn, 109, "pattern", "TH0-B", "y").unwrap();
+        // gap ≥ 0 is always true for trap/pattern types
         let count = auto_resolve_stale(&conn, 109, 0).unwrap();
         assert_eq!(count, 2);
     }

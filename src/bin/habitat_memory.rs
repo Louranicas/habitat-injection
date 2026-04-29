@@ -157,6 +157,9 @@ fn route_request(
     if request_line.contains("/cache") {
         return handle_cache(db_path);
     }
+    if request_line.contains("/buoy-status") {
+        return handle_buoy_status(db_path);
+    }
     if request_line.contains("/status") {
         return handle_status(db_path);
     }
@@ -300,6 +303,45 @@ fn handle_tool_use_tick(db_path: &std::path::Path) -> String {
         Ok(None) => json_response(200, r#"{"ticked":true,"rebuilt":false}"#),
         Err(e) => json_response(500, &format!(r#"{{"error":"{e}"}}"#)),
     }
+}
+
+#[cfg(feature = "sqlite")]
+fn handle_buoy_status(db_path: &std::path::Path) -> String {
+    use habitat_injection::m2_schema::{m06_schema, m10_pattern::get_top_by_weight};
+
+    let conn = match m06_schema::open_database(db_path) {
+        Ok(c) => c,
+        Err(e) => return json_response(500, &format!(r#"{{"error":"{e}"}}"#)),
+    };
+
+    let patterns = get_top_by_weight(&conn, 500).unwrap_or_default();
+    let (active, buoyed, floor) = patterns.iter().fold((0u32, 0u32, 0u32), |(a, b, f), p| {
+        if p.weight >= 0.7 { (a + 1, b, f) }
+        else if p.weight >= 0.4 { (a, b + 1, f) }
+        else { (a, b, f + 1) }
+    });
+
+    let active_avg = avg_weight(&patterns, 0.7, 2.0);
+    let buoyed_avg = avg_weight(&patterns, 0.4, 0.7);
+    let separation = active_avg - buoyed_avg;
+    let eligible: u32 = u32::try_from(
+        patterns.iter().filter(|p| p.natural_hit_count >= 3).count(),
+    )
+    .unwrap_or(u32::MAX);
+
+    let body = format!(
+        r#"{{"active":{active},"buoyed":{buoyed},"floor":{floor},"total":{},"buoy_eligible":{eligible},"tier_separation":{separation:.3}}}"#,
+        patterns.len()
+    );
+    json_response(200, &body)
+}
+
+#[cfg(feature = "sqlite")]
+fn avg_weight(patterns: &[habitat_injection::m2_schema::m10_pattern::PatternRow], lo: f64, hi: f64) -> f64 {
+    let (sum, count) = patterns.iter()
+        .filter(|p| p.weight >= lo && p.weight < hi)
+        .fold((0.0, 0u32), |(s, c), p| (s + p.weight, c + 1));
+    if count == 0 { 0.0 } else { sum / f64::from(count) }
 }
 
 #[cfg(feature = "sqlite")]

@@ -32,8 +32,36 @@ pub const DECAY_RATE: f64 = 0.98;
 /// `weight += REINFORCE_RATE * (1.0 - weight)` → asymptotic approach to 1.0.
 pub const REINFORCE_RATE: f64 = 0.1;
 
-/// Sessions of inactivity before a causal chain auto-resolves.
+/// Sessions of inactivity before a trap/pattern chain auto-resolves.
 pub const AUTO_RESOLVE_SESSIONS: u32 = 10;
+
+/// Sessions of inactivity before a plan chain auto-resolves.
+pub const AUTO_RESOLVE_PLAN_SESSIONS: u32 = 50;
+
+/// Minimum weight floor for patterns that have never been fired.
+/// Prevents seeded patterns from decaying to extinction without being tested.
+pub const SEEDED_PATTERN_FLOOR: f64 = 0.3;
+
+/// Hebbian buoy pulse rate for qualified pathways (`hit_count >= BUOY_THRESHOLD`).
+/// `weight += BUOY_RATE * (1 - weight)` — weaker than full reinforcement (0.1),
+/// strong enough to maintain equilibrium at ~0.5 against 0.98 decay.
+pub const BUOY_RATE: f64 = 0.02;
+
+/// Minimum natural firing count before a pathway qualifies for buoy maintenance.
+pub const BUOY_THRESHOLD: u32 = 3;
+
+/// Sessions without natural firing before a buoyed pattern loses protection.
+/// After this many sessions, the pattern decays normally past the buoy equilibrium.
+pub const BUOY_TTL_SESSIONS: u32 = 100;
+
+/// Maximum natural reinforcements a single pattern can earn from chains
+/// originating from the same causal chain label within a 10-session window.
+/// Prevents the Watcher observation → chain → pattern → injection feedback loop.
+pub const MAX_NATURAL_REINFORCE_PER_CHAIN: u32 = 3;
+
+/// Tool-use count that maps to intensity 1.0 for weighted reinforcement.
+/// Sessions with fewer tool uses get proportionally weaker reinforcement.
+pub const INTENSITY_BASELINE_TOOL_USES: u32 = 200;
 
 /// Injection cache rebuild interval in seconds (24h — cache valid until next consolidation run).
 pub const CACHE_REBUILD_SECS: u64 = 86_400;
@@ -109,7 +137,7 @@ pub const WATCHDOG_CHECK_INTERVAL_SECS: u64 = 300;
 pub const AUTO_CONSOLIDATE_INTERVAL_SECS: u64 = 21_600;
 
 /// `PostToolUse` counter threshold — rebuild cache every Nth tool use.
-pub const POST_TOOL_USE_REBUILD_THRESHOLD: u32 = 50;
+pub const POST_TOOL_USE_REBUILD_THRESHOLD: u32 = 200;
 
 /// Maximum age of backup clone before forced refresh (6 hours).
 pub const BACKUP_MAX_AGE_SECS: u64 = 21_600;
