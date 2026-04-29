@@ -165,7 +165,7 @@ fn read_cached_keyword_matches(conn: &rusqlite::Connection) -> Vec<String> {
 #[cfg(feature = "sqlite")]
 fn fetch_atuin_history() -> Vec<String> {
     std::process::Command::new("atuin")
-        .args(["history", "list", "--format", "{command}", "--after", "4 hours ago", "--limit", "500"])
+        .args(["search", "--after", "4 hours ago", "--limit", "500", "--format", "{command}", ""])
         .output()
         .ok()
         .filter(|o| o.status.success())

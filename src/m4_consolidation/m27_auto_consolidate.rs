@@ -133,7 +133,7 @@ fn precompute_keyword_matches(conn: &rusqlite::Connection) -> Vec<String> {
 fn fetch_atuin_history_for_cache() -> Vec<String> {
     std::process::Command::new("atuin")
         .args([
-            "history", "list", "--format", "{command}", "--after", "6 hours ago", "--limit", "1000",
+            "search", "--after", "6 hours ago", "--limit", "1000", "--format", "{command}", "",
         ])
         .output()
         .ok()
