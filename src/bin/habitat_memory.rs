@@ -323,7 +323,19 @@ fn handle_buoy_status(db_path: &std::path::Path) -> String {
 
     let active_avg = avg_weight(&patterns, 0.7, 2.0);
     let buoyed_avg = avg_weight(&patterns, 0.4, 0.7);
-    let separation = active_avg - buoyed_avg;
+    let floor_avg = avg_weight(&patterns, 0.0, 0.4);
+    // tier_separation is the gap between the upper-most populated tier and the
+    // tier below it. With active populated: active_avg - buoyed_avg. When
+    // active is empty (no patterns above 0.7), the metric reverts to the
+    // buoy-vs-floor gap so it stays a positive health signal as long as the
+    // buoy system is doing its job.
+    let separation = if active > 0 {
+        active_avg - buoyed_avg
+    } else if buoyed > 0 {
+        buoyed_avg - floor_avg
+    } else {
+        0.0
+    };
     let eligible: u32 = u32::try_from(
         patterns.iter().filter(|p| p.natural_hit_count >= 3).count(),
     )
