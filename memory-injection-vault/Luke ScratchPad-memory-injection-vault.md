@@ -1,7 +1,7 @@
 
 correct way to put a token in without causing security issues 
 
- ! echo "glpat-brHcLEh_7Tt7InPyL1C2RG86MQp1Omp5MDJnCw.01.121i2g1ei" > /tmp/.gl-token
+ ! echo "XXXXXXX-REDACTED-S1001883-AWAITING-GITLAB-REVOCATION-AT-ISSUER" > /tmp/.gl-token
 
 
 
